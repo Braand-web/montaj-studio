@@ -4,7 +4,7 @@ import { useApp, useT } from '../store/app';
 import { useVideo, V, newClip, freeTrack, trackEnd, duration, defaultFx, videoSnapshot, fmtDur } from './store';
 import { Engine } from './engine';
 import { Timeline } from './Timeline';
-import { getDoc, createDoc } from '../lib/docs';
+import { getDoc, createDoc, patchDoc } from '../lib/docs';
 import { importBlob, importFiles, preload } from '../lib/media';
 import type { Clip, ClipFx, FontKey, MediaItem, VideoData } from '../model/types';
 import { Composer, useAgentRun } from '../agent/Composer';
@@ -199,9 +199,13 @@ function Preview() {
     engine.onTime = (x) => useVideo.getState().setT(x);
     engine.onEnd = () => useVideo.getState().setPlaying(false);
     engine.seek(useVideo.getState().t);
-    return () => { engine?.destroy(); engine = null; };
+    return () => { saveThumb(); engine?.destroy(); engine = null; };
   }, []);
-  useEffect(() => { engine?.setData(view); }, [view]);
+  useEffect(() => {
+    engine?.setData(view);
+    const t = setTimeout(saveThumb, 2500);
+    return () => clearTimeout(t);
+  }, [view]);
 
   const dur = duration(view);
 
@@ -264,6 +268,22 @@ function Preview() {
       </div>
     </div>
   );
+}
+
+// Small preview of the current frame for the home screen.
+function saveThumb() {
+  const doc = useVideo.getState().doc;
+  if (!engine || !doc || !doc.data.clips.length) return;
+  try {
+    const src = engine.canvas;
+    const s = 320 / Math.max(src.width, src.height);
+    const c = document.createElement('canvas');
+    c.width = Math.round(src.width * s); c.height = Math.round(src.height * s);
+    c.getContext('2d')!.drawImage(src, 0, 0, c.width, c.height);
+    const thumb = c.toDataURL('image/jpeg', 0.7);
+    useVideo.setState((st) => (st.doc && st.doc.id === doc.id ? { doc: { ...st.doc, thumb } } : {}));
+    void patchDoc(doc.id, { thumb });
+  } catch { /* canvas not ready */ }
 }
 
 export function addMediaAtPlayhead(m: MediaItem) {

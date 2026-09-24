@@ -67,3 +67,17 @@ export async function addVersion(doc: Doc, origin: Version['origin'], label: str
   for (const old of vs.slice(40)) await del('versions', old.id);
   return v;
 }
+
+// Names of the documents (not in the trash) that use a media item.
+export async function mediaUsage(): Promise<Map<string, string[]>> {
+  const docs = await all<Doc>('docs');
+  const map = new Map<string, string[]>();
+  for (const d of docs) {
+    if (d.trashedAt) continue;
+    const ids = d.kind === 'video'
+      ? (d.data as VideoData).clips.map((c) => c.mediaId)
+      : (d.data as DesignData).pages.flatMap((p) => p.els.map((e) => e.mediaId));
+    for (const id of new Set(ids.filter(Boolean) as string[])) map.set(id, [...(map.get(id) ?? []), d.name]);
+  }
+  return map;
+}

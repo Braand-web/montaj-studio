@@ -6,5 +6,6 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 export default defineConfig({
   plugins: [react(), viteSingleFile()],
   build: { target: 'es2020', assetsInlineLimit: 100000000, cssCodeSplit: false },
+  esbuild: { charset: 'ascii' },
   test: { environment: 'node' },
 });

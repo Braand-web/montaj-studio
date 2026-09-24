@@ -149,7 +149,7 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
           <div className="row muted" style={{ height: ROW, flex: 'none', padding: '0 10px', borderBottom: '1px solid var(--line)', fontSize: 11, gap: 6 }}><Captions size={12} color="var(--tx3)" />{T('Sous-titres', 'Captions')}</div>
         </div>
         <div ref={scroller} style={{ minWidth: 0 }} onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); useVideo.getState().setPps(pps * (e.deltaY < 0 ? 1.15 : 0.87)); } }}>
-          <div ref={body} style={{ position: 'relative', width }}>
+          <div ref={body} style={{ position: 'relative', width, minWidth: '100%' }}>
             <div onPointerDown={(e) => { drag.current = { kind: 'seek' }; onSeek(timeAt(e.clientX)); }} style={{ height: RULER, position: 'relative', borderBottom: '1px solid var(--line)', cursor: 'pointer' }}>
               {ticks.map((s) => <div key={s} className="mono" style={{ position: 'absolute', top: 0, bottom: 0, left: s * pps, borderLeft: '1px solid var(--line2)', paddingLeft: 4, fontSize: 9, color: 'var(--tx3)', lineHeight: `${RULER}px`, pointerEvents: 'none' }}>{mmss(s)}</div>)}
               {data.markers.map((m) => <div key={m} title={mmss(m)} style={{ position: 'absolute', top: 11, left: m * pps, width: 8, height: 8, marginLeft: -4, background: '#FFD23F', transform: 'rotate(45deg)', pointerEvents: 'none' }} />)}

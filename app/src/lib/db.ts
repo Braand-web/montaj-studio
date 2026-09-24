@@ -97,3 +97,11 @@ export const prefs = {
     try { localStorage.setItem('ms:' + key, JSON.stringify(value)); } catch { /* storage blocked */ }
   },
 };
+
+export async function clearAll(): Promise<void> {
+  const db = await open();
+  for (const s of STORES) {
+    if (!db) { mem[s].clear(); continue; }
+    await tx(s, 'readwrite', (st) => st.clear());
+  }
+}

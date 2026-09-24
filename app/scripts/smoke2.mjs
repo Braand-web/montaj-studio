@@ -52,7 +52,7 @@ const step = async (name, fn) => { try { await fn(); ok++; console.log('OK  ', n
 const shot = (n) => page.screenshot({ path: `scripts/shot2-${n}.png` });
 const side = (label) => page.locator('aside nav button', { hasText: label }).first().click();
 
-await step('skip onboarding', async () => { await page.getByRole('button', { name: 'Passer' }).click(); await page.getByText('on crée quoi aujourd’hui').waitFor(); });
+await step('skip onboarding', async () => { await page.getByRole('button', { name: 'Commencer' }).first().click(); await page.getByRole('button', { name: 'Passer' }).click(); await page.getByText('on crée quoi aujourd’hui').waitFor(); });
 await step('identity from Claude account in sidebar', () => page.getByText('Connecté via claude.ai').waitFor());
 await shot('home');
 const screens = [['Studio Chat', 'Que veux-tu créer aujourd’hui ?'], ['Crédits', 'Abonnement et crédits'], ['Templates', 'Modèles'], ['Idées & bugs', 'Propose une fonctionnalité'], ['Médiathèque', 'Médiathèque'], ['Planning', 'Planifie tes contenus'], ['Création en masse', 'Colle un tableau'], ['Équipe', 'Espaces d’équipe : bientôt'], ['Kit de marque', 'Nom de la marque'], ['Fournisseurs IA', 'Catalogue'], ['Utilisation IA', 'Requêtes maximum par jour'], ['Corbeille', 'restaurables pendant 30 jours'], ['Paramètres', 'Nom affiché dans l’application'], ['Admin', 'Contenu, stockage']];

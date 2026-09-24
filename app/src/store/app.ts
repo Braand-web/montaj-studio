@@ -6,7 +6,7 @@ export const APP_NAME = 'Montaj Studio';
 
 export type Screen =
   | 'onboarding' | 'home' | 'chat' | 'credits' | 'feedback' | 'library' | 'templates' | 'bulk' | 'planner' | 'team' | 'brand'
-  | 'providers' | 'usage' | 'trash' | 'settings' | 'admin' | 'legal' | 'design' | 'video';
+  | 'providers' | 'usage' | 'trash' | 'settings' | 'admin' | 'legal' | 'design' | 'video' | 'site';
 
 export type Lang = 'fr' | 'en';
 export type Mode = 'system' | 'dark' | 'light';
@@ -50,7 +50,8 @@ interface AppState {
 const initialLang: Lang = prefs.get<Lang>('lang', (navigator.language || 'fr').startsWith('en') ? 'en' : 'fr');
 
 export const useApp = create<AppState>((setS, getS) => ({
-  screen: prefs.get('onboarded', false) ? 'home' : 'onboarding',
+  // First visit lands on the public site; returning users go straight to their home.
+  screen: prefs.get('onboarded', false) ? 'home' : 'site',
   docId: null,
   lang: initialLang,
   mode: prefs.get<Mode>('mode', 'system'),

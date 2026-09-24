@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Clapperboard, Image as ImageIcon, Plus, SquarePen, SunMoon, Languages, Keyboard, Scale } from 'lucide-react';
+import { Search, Clapperboard, Image as ImageIcon, Plus, SquarePen, SunMoon, Languages, Keyboard, Scale, Globe } from 'lucide-react';
 import { useApp, useT, loadBrand } from './store/app';
 import { Shell, NAV, useDocs, goNav, NotificationsPanel, openEditor } from './ui/Shell';
 import { Toast, Modal } from './ui/kit';
@@ -18,6 +18,7 @@ import { Team } from './screens/Team';
 import { Usage } from './screens/Usage';
 import { Admin } from './screens/Admin';
 import { Legal } from './screens/Legal';
+import { Site } from './screens/Site';
 import { useNotifs, notify as pushNotif } from './lib/notify';
 import { useUsage } from './lib/usage';
 import { useIdentity } from './lib/identity';
@@ -66,6 +67,7 @@ export function App() {
 
   let body: React.ReactNode;
   if (screen === 'onboarding') body = <Onboarding />;
+  else if (screen === 'site') body = <Site />;
   else if (screen === 'design') body = <DesignEditor />;
   else if (screen === 'video') body = <VideoEditor />;
   else if (screen === 'chat') body = <StudioChat />;
@@ -122,6 +124,7 @@ function Palette({ onClose }: { onClose(): void }) {
     docs.filter((d) => m(d.name)).slice(0, 8).forEach((d) => out.push({ g: T('Documents', 'Documents'), label: d.name, sub: d.format, icon: d.kind === 'video' ? <Clapperboard size={14} /> : <ImageIcon size={14} />, go: () => go(d.kind === 'video' ? 'video' : 'design', d.id) }));
     NAV.filter((n) => (n.id !== 'admin' || useIdentity.getState().isOwner) && m(T(n.fr, n.en))).forEach((n) => out.push({ g: T('Aller à', 'Go to'), label: T(n.fr, n.en), icon: <n.I size={14} />, go: () => goNav(n.id) }));
     if (m(T('Documents légaux', 'Legal'))) out.push({ g: T('Aller à', 'Go to'), label: T('Documents légaux', 'Legal'), icon: <Scale size={14} />, go: () => go('legal') });
+    if (m(T('Voir le site marketing', 'View the marketing site'))) out.push({ g: T('Aller à', 'Go to'), label: T('Voir le site marketing', 'View the marketing site'), icon: <Globe size={14} />, go: () => go('site') });
     const acts: [string, React.ReactNode, () => void][] = [
       [T('Nouvelle discussion', 'New chat'), <SquarePen size={14} />, () => go('chat')],
       [T('Nouveau design', 'New design'), <Plus size={14} />, () => void openEditor('design')],

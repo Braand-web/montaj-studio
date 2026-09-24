@@ -188,6 +188,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <button className="btn" style={{ height: 28 }} onClick={() => useApp.getState().toggleLang()}>{lang === 'fr' ? 'FR' : 'EN'}</button>
             <button className="btn" style={{ height: 28 }} onClick={() => useApp.getState().cycleMode()} title={T('Thème', 'Theme')}>{mode === 'system' ? T('Auto', 'Auto') : mode === 'dark' ? T('Sombre', 'Dark') : T('Clair', 'Light')}</button>
             <button className="btn bare" style={{ height: 28, marginLeft: 'auto', fontSize: 11, padding: '0 4px' }} onClick={() => go('onboarding')}>{T('Accueil guidé', 'Onboarding')}</button>
+            <button className="btn bare" style={{ height: 28, fontSize: 11, padding: '0 4px' }} onClick={() => go('site')}>{T('Site', 'Website')}</button>
             <button className="btn" style={{ height: 28, width: 26, padding: 0 }} onClick={() => set({ kbOpen: true })} title={T('Raccourcis', 'Shortcuts')}>?</button>
           </div>
         </div>

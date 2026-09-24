@@ -10,7 +10,17 @@ await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
 await page.goto('http://localhost:4173/montaj-studio.html', { waitUntil: 'domcontentloaded' });
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { console.log('FAIL', name, e.message.split('\n')[0]); } };
 
-await step('onboarding visible', () => page.getByText('Qu’est-ce que tu crées le plus souvent ?').waitFor({ timeout: 5000 }));
+await step('marketing site visible', () => page.getByText('Questions fréquentes').waitFor({ timeout: 5000 }));
+await step('site: features menu + FAQ + pricing', async () => {
+  await page.getByRole('button', { name: /Fonctionnalités/ }).click();
+  await page.locator('.site-menu-card', { hasText: 'Tarifs' }).click();
+  await page.getByText('Les éditeurs sont gratuits').waitFor();
+  if (!(await page.getByRole('button', { name: 'Bientôt' }).first().isDisabled())) throw new Error('paid plan not disabled');
+  await page.getByRole('button', { name: 'Faut-il créer un compte ?' }).click();
+  await page.getByText('Tu peux tout utiliser tout de suite').waitFor();
+});
+await page.screenshot({ path: 'scripts/shot-site.png' });
+await step('site CTA -> onboarding', async () => { await page.getByRole('button', { name: 'Commencer' }).first().click(); await page.getByText('Qu’est-ce que tu crées le plus souvent ?').waitFor(); });
 await step('skip onboarding', async () => { await page.getByRole('button', { name: 'Passer' }).click(); await page.getByText('on crée quoi aujourd’hui').waitFor(); });
 await page.screenshot({ path: 'scripts/shot-home.png' });
 await step('create story', async () => { await page.getByRole('button', { name: /Story/ }).first().click(); await page.getByText('Ajouter un titre').waitFor(); });
@@ -85,6 +95,7 @@ await step('composer without claude', async () => {
 for (const s of ['Médiathèque', 'Templates', 'Création en masse', 'Planning', 'Kit de marque', 'Fournisseurs IA', 'Corbeille', 'Paramètres']) {
   await step('screen ' + s, async () => { await page.locator('.logo-btn').first().click().catch(() => {}); await page.getByRole('button', { name: s }).first().click(); await page.waitForTimeout(300); });
 }
+await step('sidebar -> site and back', async () => { await page.getByRole('button', { name: 'Site', exact: true }).click(); await page.getByText('Questions fréquentes').waitFor(); await page.getByRole('button', { name: 'Ouvrir l’app' }).click(); await page.getByText('on crée quoi aujourd’hui').waitFor(); });
 await page.getByRole('button', { name: 'Médiathèque' }).first().click().catch(() => {});
 await page.screenshot({ path: 'scripts/shot-library.png' });
 console.log('\nERRORS:', errors.length ? errors.join('\n') : 'none');

@@ -21,7 +21,7 @@ interface DesignState {
   load(doc: Doc<DesignData>): void;
   data(): DesignData;
   page(): Page;
-  apply(fn: (d: DesignData) => void, opts?: { keepSel?: boolean }): void;
+  apply(fn: (d: DesignData) => void, opts?: { keepSel?: boolean; coalesce?: string }): void;
   begin(): void;
   live(fn: (d: DesignData) => void): void;
   end(): void;
@@ -37,6 +37,7 @@ interface DesignState {
 }
 
 let gestureBase: DesignData | null = null;
+let lastKey = '', lastAt = 0;
 
 const persist = debounce(async (doc: Doc<DesignData>) => {
   const p0 = doc.data.pages[0];
@@ -76,7 +77,10 @@ export const useDesign = create<DesignState>((set, get) => {
       const cur = s.doc.data;
       const next = deepClone(cur);
       fn(next);
-      set({ past: [...s.past.slice(-99), cur], future: [] });
+      const now = Date.now();
+      const merge = !!opts?.coalesce && opts.coalesce === lastKey && now - lastAt < 1200;
+      lastKey = opts?.coalesce ?? ''; lastAt = now;
+      if (!merge) set({ past: [...s.past.slice(-99), cur], future: [] });
       if (!opts?.keepSel) {
         const ids = new Set(next.pages.flatMap((p) => p.els.map((e) => e.id)));
         set({ sel: s.sel.filter((id) => ids.has(id)) });

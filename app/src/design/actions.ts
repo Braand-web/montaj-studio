@@ -84,7 +84,7 @@ export function updateEls(ids: string[], patch: Partial<El> | ((e: El) => void))
       if (typeof patch === 'function') patch(e); else Object.assign(e, patch);
     }
     syncComponents(d, ids);
-  }, { keepSel: true });
+  }, { keepSel: true, coalesce: typeof patch === 'object' ? ids.join() + ':' + Object.keys(patch).join() : undefined });
 }
 
 // Linked components: editing one instance's content updates every instance (addendum #11).

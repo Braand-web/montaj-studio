@@ -5,12 +5,15 @@ import { sha256, uid } from './util';
 // Media pipeline (SPEC §3.7): files stay on the device, deduplicated by SHA-256.
 
 const urls = new Map<string, string>();
+const metas = new Map<string, MediaItem>();
+export const mediaMetaSync = (id?: string) => (id ? metas.get(id) : undefined);
 const listeners = new Set<() => void>();
 export const onMediaChange = (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); };
 const emit = () => listeners.forEach((f) => f());
 
 export async function listMedia(): Promise<MediaItem[]> {
   const items = await all<MediaItem>('media');
+  items.forEach((m) => metas.set(m.id, m));
   return items.sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -94,6 +97,7 @@ export async function importBlob(blob: Blob, name: string, source: MediaItem['so
   };
   await put('blobs', id, blob);
   await put('media', id, item);
+  metas.set(id, item);
   emit();
   return item;
 }

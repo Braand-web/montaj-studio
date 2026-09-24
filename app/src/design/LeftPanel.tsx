@@ -6,6 +6,7 @@ import { addImageFromMedia, addShape, addText, setImageMedia, updateEls, setPage
 import { importFiles, listMedia, onMediaChange } from '../lib/media';
 import type { MediaItem } from '../model/types';
 import { getSample, sampleErrorText } from '../lib/claude';
+import { tracked } from '../lib/usage';
 import { FONTS } from '../model/fonts';
 
 export type LeftTab = 'text' | 'shapes' | 'media' | 'brand' | 'ai';
@@ -203,10 +204,10 @@ function AiTab() {
     if (!sample || !prompt.trim()) return;
     setBusy('write');
     try {
-      const { text } = await sample(
+      const { text } = await tracked('ai-write', 'quick', () => sample(
         `Write short copy for a visual design. Brief: ${prompt}\nBrand voice: ${brand.tone}\nLanguage: ${fr ? 'French' : 'English'}.\nReply with only the text to place on the design, no quotes, no preamble, at most 2 short lines.`,
         { modelTier: 'quick', cache: false },
-      );
+      ), (r) => r.text.length);
       const clean = text.trim().replace(/^["«»“”]+|["«»“”]+$/g, '');
       const st = useDesign.getState();
       const target = st.page().els.find((e) => sel.length === 1 && e.id === sel[0] && e.type === 'text');
@@ -227,10 +228,10 @@ function AiTab() {
     setBusy('tr-' + code);
     try {
       const src = Object.fromEntries(texts.map((e) => [e.id, e.text]));
-      const out = await sample.json<Record<string, string>>(
+      const out = await tracked('ai-translate', 'quick', () => sample.json<Record<string, string>>(
         `Translate the values of this JSON object into ${name} (${code}). Keep the same keys, keep line breaks, keep it short enough for a design, keep brand names. Reply with only the JSON object.\n\n${JSON.stringify(src)}`,
         { modelTier: 'quick' },
-      );
+      ));
       const ids = texts.map((e) => e.id).filter((id) => typeof out?.[id] === 'string');
       updateEls(ids, (e) => { e.text = out[e.id]; });
       notify(T(`Page traduite (${ids.length} textes). ⌘Z pour annuler.`, `Page translated (${ids.length} texts). ⌘Z to undo.`));

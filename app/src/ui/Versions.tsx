@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { addVersion, listVersions } from '../lib/docs';
+import { notify as pushNotif } from '../lib/notify';
 import type { DesignData, Doc, Version, VideoData } from '../model/types';
 
 // Version history (SPEC §6.10): manual versions, automatic versions after assistant runs,
@@ -39,6 +40,7 @@ export function VersionsPanel({ doc, onRestore, onClose }: { doc: Doc; onRestore
               await addVersion(doc, 'restore', T('Avant restauration', 'Before restore'));
               onRestore(JSON.parse(JSON.stringify(v.data)));
               load();
+              pushNotif({ kind: 'version', text: T(`Version restaurée : ${doc.name}`, `Version restored: ${doc.name}`) });
               notify(T('Version restaurée. L’état précédent a été gardé dans l’historique.', 'Version restored. The previous state was kept in history.'));
             }}>{T('Restaurer', 'Restore')}</button>
           </div>

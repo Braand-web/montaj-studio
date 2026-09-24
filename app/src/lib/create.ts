@@ -26,6 +26,14 @@ export async function newFromFormat(f: Format, prompt?: string) {
 }
 
 export async function newFromTemplate(t: Template, prompt?: string) {
+  if (t.video) {
+    const v = t.video();
+    const d = await createDoc('video', tNow(t.fr, t.en), `${v.w}×${v.h}`, v);
+    const app = useApp.getState();
+    app.set({ pendingPrompt: prompt ?? null });
+    app.go('video', d.id);
+    return;
+  }
   const data = t.build();
   const p0 = data.pages[0];
   const d = await createDoc('design', tNow(t.fr, t.en), dimsLabel(p0.w, p0.h), data);

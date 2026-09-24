@@ -16,8 +16,8 @@ export function Templates() {
   const previews = useMemo(() => new Map(TEMPLATES.map((t) => [t.id, t.build()])), []);
   const shown = TEMPLATES.filter((t) => (cat === 'all' || t.cat === cat) && (!q || (T(t.fr, t.en) + ' ' + t.tags).toLowerCase().includes(q.toLowerCase())));
   const cats = [
-    { id: 'all' as const, l: T('Tous', 'All') }, { id: 'social' as const, l: T('Réseaux sociaux', 'Social') },
-    { id: 'print' as const, l: T('Impression', 'Print') }, { id: 'office' as const, l: T('Bureau', 'Office') },
+    { id: 'all' as const, l: T('Tous', 'All') }, { id: 'social' as const, l: T('Réseaux sociaux', 'Social') }, { id: 'video' as const, l: T('Vidéo', 'Video') },
+    { id: 'thumb' as const, l: T('Miniatures', 'Thumbnails') }, { id: 'print' as const, l: T('Impression', 'Print') }, { id: 'office' as const, l: T('Présentations et documents', 'Slides and documents') },
   ];
   return (
     <div className="page screen-in" style={{ maxWidth: 1300 }}>
@@ -32,10 +32,10 @@ export function Templates() {
           return (
             <div key={t.id} className="col" style={{ gap: 8 }}>
               <div style={{ height: 220, borderRadius: 16, background: 'var(--panel2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, overflow: 'hidden' }}>
-                <div style={{ width: `min(100%, ${(192 * p.w) / p.h}px)`, pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,.2)' }}><PageView page={p} /></div>
+                <div style={{ position: 'relative', width: `min(100%, ${(192 * p.w) / p.h}px)`, pointerEvents: 'none', boxShadow: '0 8px 24px rgba(0,0,0,.2)' }}><PageView page={p} />{t.video && <span style={{ position: 'absolute', top: 8, left: 8, height: 22, padding: '0 8px', borderRadius: 11, background: 'rgba(20,20,22,.6)', color: '#fff', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>▶ {T('Vidéo', 'Video')}</span>}</div>
               </div>
               <div className="row" style={{ gap: 8 }}>
-                <div className="col grow"><span className="ell" style={{ fontSize: 13, fontWeight: 600 }}>{T(t.fr, t.en)}</span><span className="faint" style={{ fontSize: 11 }}>{T(f.fr, f.en)} · {d.pages.length} p.</span></div>
+                <div className="col grow"><span className="ell" style={{ fontSize: 13, fontWeight: 600 }}>{T(t.fr, t.en)}</span><span className="faint" style={{ fontSize: 11 }}>{T(f.fr, f.en)}{t.video ? '' : ` · ${d.pages.length} p.`}</span></div>
                 <button onClick={() => { setAi(t); setBrief(''); }} title={T('Adapter avec l’assistant', 'Adapt with the assistant')} style={{ width: 32, height: 32, borderRadius: 16, border: 0, background: 'color-mix(in oklab, #BF5AF2 16%, var(--panel2))', color: '#BF5AF2', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Sparkles size={14} /></button>
                 <button className="btn primary" style={{ height: 32 }} onClick={() => void newFromTemplate(t)}>{T('Utiliser', 'Use')}</button>
               </div>

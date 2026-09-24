@@ -13,7 +13,7 @@ export function Onboarding() {
   const go = useApp((s) => s.go);
   const uses = useApp((s) => s.uses);
   const [step, setStep] = useState(0);
-  const finish = (screen: 'home' | 'templates' | 'assistant' = 'home') => { set({ onboarded: true }); void requestPersist(); go(screen); };
+  const finish = (screen: 'home' | 'templates' | 'providers' = 'home') => { set({ onboarded: true }); void requestPersist(); go(screen); };
   const useOpts = [
     ['yt', T('Vidéos YouTube', 'YouTube videos'), T('Montages longs, miniatures', 'Long edits, thumbnails')],
     ['short', T('Shorts, Reels, TikTok', 'Shorts, Reels, TikTok'), T('Formats verticaux courts', 'Short vertical formats')],
@@ -78,7 +78,7 @@ export function Onboarding() {
               </div>
               <div className="row wrap" style={{ gap: 8 }}>
                 <button className="btn primary lg" onClick={() => finish('home')}>{T('Commencer', 'Get started')}</button>
-                <button className="btn lg" onClick={() => finish('assistant')}>{T('Réglages de l’assistant', 'Assistant settings')}</button>
+                <button className="btn lg" onClick={() => finish('providers')}>{T('Réglages de l’assistant', 'Assistant settings')}</button>
               </div>
             </>
           )}

@@ -4,6 +4,7 @@ import { ArrowUp, Check, CircleAlert, LoaderCircle, Square } from 'lucide-react'
 import { runAgent, type AgentTool, type Step } from './runner';
 import { useApp, useT, type AgentMode, type Tier } from '../store/app';
 import type { Msg } from '../lib/claude';
+import { notify } from '../lib/notify';
 
 // Conversational Composer (SPEC §9.2). Ask = read-only, Assist = works on a copy and waits
 // for Apply/Refuse, Agent = edits directly with Stop and one-step "Undo all".
@@ -61,7 +62,7 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
   }, [turns]);
 
   useEffect(() => {
-    if (autoPrompt && consumed.current !== autoPrompt && !running) {
+    if (autoPrompt && autoPrompt !== '__feedback__' && consumed.current !== autoPrompt && !running) {
       consumed.current = autoPrompt;
       setApp({ pendingPrompt: null });
       void send(autoPrompt);
@@ -95,6 +96,7 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
       tools: session.tools,
       signal: ctl.signal,
       fr: lang === 'fr',
+      source: host.kind === 'design' ? 'composer-design' : 'composer-video',
       cb: {
         onText: (t) => patch(aid, { text: t, status: 'running' }),
         onStep: (s) => {
@@ -115,6 +117,7 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
     else status = 'answer';
     if (status === 'stopped' && mode === 'assist' && changed) status = 'proposal';
     patch(aid, { text: res.text, status, error: res.error, steps: [...steps] });
+    if (status === 'done' || status === 'proposal') notify({ kind: 'assistant', text: (lang === 'fr' ? (status === 'done' ? 'Assistant : ' + session.changes.length + ' modification(s) appliquée(s)' : 'Assistant : proposition prête à valider') : (status === 'done' ? 'Assistant: ' + session.changes.length + ' change(s) applied' : 'Assistant: proposal ready to review')), to: host.kind === 'design' ? 'design' : 'video' });
   }
 
   const modes: { id: AgentMode; label: string }[] = [
@@ -159,9 +162,9 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
           placeholder={T('Décris ce que tu veux…', 'Describe what you want…')}
           style={{ resize: 'none' }}
         />
-        <div className="row">
+        <div className="row wrap" style={{ gap: 6 }}>
           <select className="input" value={tier} onChange={(e) => setApp({ tier: e.target.value as Tier })} style={{ height: 28, fontSize: 11, padding: '0 6px', width: 'auto' }} title={T('Modèle Claude', 'Claude model')}>
-            {tiers.map((x) => <option key={x.id} value={x.id}>Claude · {x.label}</option>)}
+            {tiers.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
           <div className="seg">
             {modes.map((m) => <button key={m.id} className={mode === m.id ? 'on' : ''} onClick={() => setApp({ agentMode: m.id })}>{m.label}</button>)}

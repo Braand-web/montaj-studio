@@ -11,6 +11,7 @@ import { PageView } from './ElementView';
 import { FORMATS } from '../model/formats';
 import { slug } from '../lib/util';
 import { recordCanvas, bestVideoMime } from '../lib/record';
+import { notify as pushNotif } from '../lib/notify';
 import type { Page } from '../model/types';
 
 // Export (SPEC §5.14): PNG / JPG / PDF / animated video, no watermark, done in the browser.
@@ -80,6 +81,7 @@ export function ExportDesign({ onClose }: { onClose(): void }) {
         else { blob = new Blob([zipSync(files, { level: 0 })], { type: 'application/zip' }); file = `${base}.zip`; }
       }
       setState({ phase: 'done', pct: 100, file, blob });
+      pushNotif({ kind: 'export', text: T(`Export terminé : ${file}`, `Export complete: ${file}`), to: 'design' });
     } catch (e) {
       if ((e as Error).message === 'cancel') { setState({ phase: 'idle', pct: 0 }); return; }
       notify(T('L’export a échoué : ', 'Export failed: ') + (e as Error).message, 'err');

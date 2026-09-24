@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Undo2, Redo2, History, Scaling, Presentation, Download, Copy, Trash2, Lock, Unlock, ArrowUpToLine, ArrowDownToLine, Group, Ungroup, Component, CloudCheck, Plus, ChevronLeft, ChevronRight, Sparkles, Layers as LayersIcon, SlidersHorizontal } from 'lucide-react';
+import { Undo2, Redo2, History, Scaling, Presentation, Download, Copy, Trash2, Lock, Unlock, ArrowUpToLine, ArrowDownToLine, Group, Ungroup, Component, CloudCheck, Plus, ChevronLeft, ChevronRight, Sparkles, Layers as LayersIcon, SlidersHorizontal, LayoutGrid } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useDesign, snapshot } from './store';
 import { getDoc } from '../lib/docs';
@@ -152,6 +152,7 @@ function Header({ onDialog }: { onDialog(d: 'export' | 'resize' | 'versions' | '
   return (
     <header className="ed-header">
       <button className="logo-btn" onClick={() => go('home')} title={T('Accueil', 'Home')}><LogoMark /></button>
+      <button className="btn bare" style={{ height: 30, padding: '0 8px', flex: 'none' }} onClick={() => useApp.getState().set({ palOpen: true })} title={T('Aller à… (⌘K)', 'Go to… (⌘K)')}><LayoutGrid size={14} /><span className="mono" style={{ fontSize: 10, padding: '1px 5px', borderRadius: 5, background: 'var(--panel2)', color: 'var(--tx3)' }}>⌘K</span></button>
       <div className="col" style={{ lineHeight: 1.2, minWidth: 0, maxWidth: 260 }}>
         <input id="doc-name" className="ell" value={doc.name} onChange={(e) => useDesign.getState().rename(e.target.value)} style={{ fontWeight: 600, border: 0, background: 'transparent', outline: 'none', padding: 0, width: 240 }} />
         <span className="faint row" style={{ fontSize: 11, gap: 4 }}><CloudCheck size={11} color="var(--accTx)" />{T('Enregistré · sur cet appareil', 'Saved · on this device')}</span>

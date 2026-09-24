@@ -1,5 +1,6 @@
 import { getSample, sampleErrorText, type Msg, type SampleTool } from '../lib/claude';
 import type { AgentMode, Tier } from '../store/app';
+import { overBudget, useUsage, type UsageSource } from '../lib/usage';
 
 // Agent loop (SPEC §9): Claude reads the document summary, calls page tools that go through
 // the same engine as the UI, and reports what it did. Nothing is simulated.
@@ -39,7 +40,11 @@ export async function runAgent(opts: {
   signal: AbortSignal;
   fr: boolean;
   cb: RunCallbacks;
+  source: UsageSource;
 }): Promise<RunResult> {
+  if (overBudget()) {
+    return { text: '', code: 'budget', error: opts.fr ? 'Limite quotidienne de requêtes atteinte. Modifie-la dans Utilisation IA.' : 'Daily request limit reached. Change it in AI usage.' };
+  }
   const sample = await getSample();
   if (!sample) {
     return {
@@ -62,12 +67,13 @@ export async function runAgent(opts: {
         name: t.name,
         description: t.description,
         inputSchema: { type: 'object', properties: t.schema ?? {}, required: t.required ?? [] },
-        execute: (input, ctx) => {
+        execute: async (input, ctx) => {
           if (ctx.signal.aborted) throw new Error('stopped');
+          calls++;
           const step: Step = { id: ++stepSeq, tool: t.name, args: summarizeArgs(input), status: 'run', write: t.write };
           opts.cb.onStep({ ...step });
           try {
-            const out = t.run(input);
+            const out = await t.run(input);
             opts.cb.onStep({ ...step, status: 'ok' });
             return out ?? { ok: true };
           } catch (e) {
@@ -91,6 +97,9 @@ export async function runAgent(opts: {
     { role: 'user', content: opts.prompt },
   ];
   // Adjacent same-role turns are allowed; make sure the list ends on the user.
+  const t0 = performance.now();
+  let calls = 0;
+  const log = (status: 'ok' | 'error' | 'stopped', code?: string, chars = 0) => useUsage.getState().log({ source: opts.source, tier: opts.tier, tools: calls, ms: Math.round(performance.now() - t0), status, code, chars });
   try {
     const res = await sample(input, {
       signal: opts.signal,
@@ -99,10 +108,12 @@ export async function runAgent(opts: {
       cache: sampleTools.length ? undefined : false,
       onText: ({ text }) => opts.cb.onText(text),
     });
+    log('ok', undefined, res.text.length);
     return { text: res.text, truncated: res.truncated };
   } catch (e) {
     const err = e as { code?: string; text?: string };
-    if (err?.code === 'cancelled') return { text: err.text ?? '', code: 'cancelled' };
+    if (err?.code === 'cancelled') { log('stopped', 'cancelled'); return { text: err.text ?? '', code: 'cancelled' }; }
+    log('error', err?.code);
     return { text: err?.text ?? '', code: err?.code, error: sampleErrorText(err?.code, opts.fr) };
   }
 }

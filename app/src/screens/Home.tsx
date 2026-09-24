@@ -95,7 +95,7 @@ export function Home() {
             style={{ resize: 'none', border: 0, background: 'transparent', color: 'var(--tx)', outline: 'none', fontSize: 16, lineHeight: 1.45, padding: 0 }} />
           <div className="row wrap" style={{ gap: 6 }}>
             <span className="row muted" style={{ height: 30, padding: '0 10px', borderRadius: 10, border: '1px solid var(--line2)', gap: 6, fontSize: 12 }}><Sparkles size={13} />Claude</span>
-            <button className="row muted" onClick={() => go('assistant')} style={{ height: 30, padding: '0 10px', borderRadius: 10, border: '1px solid var(--line2)', gap: 6, fontSize: 12, background: 'transparent' }}><ShieldCheck size={13} />{useApp.getState().agentMode === 'ask' ? 'Ask' : useApp.getState().agentMode === 'agent' ? 'Agent' : 'Assist'}</button>
+            <button className="row muted" onClick={() => go('providers')} style={{ height: 30, padding: '0 10px', borderRadius: 10, border: '1px solid var(--line2)', gap: 6, fontSize: 12, background: 'transparent' }}><ShieldCheck size={13} />{useApp.getState().agentMode === 'ask' ? 'Ask' : useApp.getState().agentMode === 'agent' ? 'Agent' : 'Assist'}</button>
             <div className="grow" />
             <button className="btn primary" onClick={() => send()} title={T('Envoyer', 'Send')} style={{ width: 36, height: 36, padding: 0, borderRadius: 18 }}><ArrowUp size={16} /></button>
           </div>
@@ -103,7 +103,7 @@ export function Home() {
         </div>
       </div>
       <div className="row wrap" style={{ gap: 8, marginTop: -14 }}>
-        {sugg.map((s) => <button key={s.label} className="chip" style={{ borderRadius: 15, height: 30, color: 'var(--tx2)' }} onClick={() => send(s.label)}><s.icon size={12} />{s.label}</button>)}
+        {sugg.map((s) => <button key={s.label} className="chip wrap-text" style={{ borderRadius: 15, color: 'var(--tx2)', maxWidth: '100%' }} onClick={() => send(s.label)}><s.icon size={12} />{s.label}</button>)}
       </div>
 
       <div className="col" style={{ gap: 12 }}>

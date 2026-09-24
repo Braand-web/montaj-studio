@@ -22,13 +22,23 @@ Légende : **Fonctionnel** · **Bientôt** (visible et marqué comme tel dans l'
 | Kit de marque | Nom, logo, palette, polices, ton ; utilisé par les éditeurs et l'assistant |
 | Versions | Manuelles, autosave toutes les 5 min, après l'assistant, restauration avec sauvegarde de l'état courant |
 | Données | Sauvegarde complète en zip et restauration, stockage persistant, effacement |
+| Barre latérale | Toutes les entrées du prototype : Notifications, Accueil, Studio Chat, Éditeur vidéo, Éditeur design (ouvre le dernier document ou en crée un), Crédits, Templates, Idées & bugs, Médiathèque, Planning, Création en masse, Équipe, Kit de marque, Fournisseurs IA, Utilisation IA, Corbeille, Paramètres, Admin ; récents, « Suggérer une idée », stockage, compte |
+| Studio Chat | Conversation plein écran avec Claude, fils enregistrés, recettes, galerie, tâches, éléments à mentionner ; Claude crée de vrais designs (formats, modèles, éléments) et projets vidéo (titres, sous-titres) qui s'ouvrent dans les éditeurs |
+| Notifications | Exports, assistant, Studio Chat, corbeille (suppression à venir / effectuée), versions, suggestions suivies ; préférences par type |
+| Utilisation IA | Journal de chaque requête Claude (source, modèle, outils, durée, statut), 7 derniers jours, limite quotidienne appliquée, règle d'approbation |
+| Idées & bugs | Idées et bugs, votes, tris, onglets, recherche, suggestions similaires, réponses, suivi, vue admin (statut, épingler, masquer, fusionner, priorités) ; « Envoyer à l'équipe » ouvre le vrai commentaire claude.ai sur la page |
+| Compte | Identité du compte claude.ai (nom, avatar) ; mode local hors de claude.ai |
+| Admin | Indicateurs, contenu, stockage, modération, modèles (visible pour le propriétaire) |
+| Documents légaux | Conditions, confidentialité, IA et données, licences |
+| Templates | 22 modèles dont 4 vidéo (Reel produit, tuto, intro YouTube, extrait de podcast) |
 | Général | Français / anglais, thème auto / sombre / clair, raccourcis (`?`), palette de recherche (⌘K), vue téléphone pour le design |
 
 ## Bientôt (nécessite un serveur ou un modèle local non embarqué)
 
 | Fonctionnalité | Ce qui manque |
 |---|---|
-| Comptes, synchronisation, équipes, commentaires partagés, liens de partage | Backend (Supabase prévu) |
+| Comptes Montaj, synchronisation, espaces d'équipe partagés, tableau d'idées commun à tous les utilisateurs, liens de partage | Backend (Supabase prévu) et hébergement hors claude.ai (la base partagée claude.ai empêcherait le partage public) |
+| Crédits payants et formule Pro Clés | Prestataire de paiement et passerelle serveur ; les formules sont affichées comme « Bientôt », aucun paiement simulé |
 | Clés BYOK (OpenAI, fal.ai, ElevenLabs…) : génération d'images, de vidéos, de voix | Passerelle serveur avec coffre de clés chiffré |
 | Publication automatique et statistiques sociales | OAuth et API officielles des réseaux, côté serveur |
 | Transcription automatique (Whisper local), détourage local, isolation de voix | Modèles Transformers.js / MediaPipe à charger ; la page claude.ai bloque les téléchargements de modèles |

@@ -91,6 +91,8 @@ export function sampleErrorText(code: string | undefined, fr: boolean): string {
       return fr ? "Claude n'est pas disponible pour ce compte dans cette vue." : 'Claude is not available for this account in this view.';
     case 'tools_unavailable':
       return fr ? "Cette vue ne permet pas à Claude d'agir sur le document. Le mode Ask reste disponible." : "This view can't let Claude act on the document. Ask mode still works.";
+    case 'budget':
+      return fr ? 'Limite quotidienne de requêtes atteinte. Modifie-la dans Utilisation IA.' : 'Daily request limit reached. Change it in AI usage.';
     case 'rate_limited':
       return fr ? 'Trop de demandes pour le moment. Réessaie dans quelques minutes.' : 'Too many requests right now. Try again in a few minutes.';
     case 'session_expired':

@@ -82,7 +82,7 @@ await step('composer without claude', async () => {
   await page.keyboard.press('Enter');
   await page.getByText('ouvre cette application depuis claude.ai').waitFor({ timeout: 15000 });
 });
-for (const s of ['Médiathèque', 'Modèles', 'Création en masse', 'Planning', 'Kit de marque', 'Assistant IA', 'Corbeille', 'Paramètres']) {
+for (const s of ['Médiathèque', 'Templates', 'Création en masse', 'Planning', 'Kit de marque', 'Fournisseurs IA', 'Corbeille', 'Paramètres']) {
   await step('screen ' + s, async () => { await page.locator('.logo-btn').first().click().catch(() => {}); await page.getByRole('button', { name: s }).first().click(); await page.waitForTimeout(300); });
 }
 await page.getByRole('button', { name: 'Médiathèque' }).first().click().catch(() => {});

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Clapperboard, Image as ImageIcon, Plus } from 'lucide-react';
+import { Search, Clapperboard, Image as ImageIcon, Plus, SquarePen, SunMoon, Languages, Keyboard, Scale } from 'lucide-react';
 import { useApp, useT, loadBrand } from './store/app';
-import { Shell, NAV, useDocs } from './ui/Shell';
+import { Shell, NAV, useDocs, goNav, NotificationsPanel, openEditor } from './ui/Shell';
 import { Toast, Modal } from './ui/kit';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
@@ -10,7 +10,17 @@ import { Templates } from './screens/Templates';
 import { Bulk } from './screens/Bulk';
 import { Planner } from './screens/Planner';
 import { Brand } from './screens/Brand';
-import { Assistant } from './screens/Assistant';
+import { Providers } from './screens/Providers';
+import { StudioChat } from './screens/StudioChat';
+import { Credits } from './screens/Credits';
+import { Feedback } from './screens/Feedback';
+import { Team } from './screens/Team';
+import { Usage } from './screens/Usage';
+import { Admin } from './screens/Admin';
+import { Legal } from './screens/Legal';
+import { useNotifs, notify as pushNotif } from './lib/notify';
+import { useUsage } from './lib/usage';
+import { useIdentity } from './lib/identity';
 import { Trash } from './screens/Trash';
 import { Settings } from './screens/Settings';
 import { DesignEditor } from './design/DesignEditor';
@@ -28,7 +38,17 @@ export function App() {
   const palOpen = useApp((s) => s.palOpen);
   const set = useApp((s) => s.set);
 
-  useEffect(() => { void loadBrand(); void sweepTrash(); void listMedia(); }, []);
+  useEffect(() => {
+    void loadBrand();
+    void listMedia();
+    void useUsage.getState().load();
+    void useIdentity.getState().load();
+    void useNotifs.getState().load().then(() => sweepTrash()).then((r) => {
+      const fr = useApp.getState().lang === 'fr';
+      if (r.purged) pushNotif({ kind: 'trash', text: fr ? `${r.purged} document(s) supprimé(s) définitivement de la corbeille (30 jours).` : `${r.purged} document(s) permanently deleted from trash (30 days).`, to: 'trash' });
+      if (r.soon) pushNotif({ kind: 'trash', text: fr ? `${r.soon} document(s) de la corbeille seront supprimés dans moins de 3 jours.` : `${r.soon} trashed document(s) will be deleted in under 3 days.`, to: 'trash' });
+    });
+  }, []);
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
 
   useEffect(() => {
@@ -48,8 +68,9 @@ export function App() {
   if (screen === 'onboarding') body = <Onboarding />;
   else if (screen === 'design') body = <DesignEditor />;
   else if (screen === 'video') body = <VideoEditor />;
+  else if (screen === 'chat') body = <StudioChat />;
   else {
-    const S = { home: Home, library: Library, templates: Templates, bulk: Bulk, planner: Planner, brand: Brand, assistant: Assistant, trash: Trash, settings: Settings }[screen] ?? Home;
+    const S = { home: Home, library: Library, templates: Templates, bulk: Bulk, planner: Planner, brand: Brand, providers: Providers, trash: Trash, settings: Settings, credits: Credits, feedback: Feedback, team: Team, usage: Usage, admin: Admin, legal: Legal }[screen] ?? Home;
     body = <Shell><S key={screen} /></Shell>;
   }
 
@@ -58,6 +79,7 @@ export function App() {
       {body}
       {kbOpen && <Shortcuts onClose={() => set({ kbOpen: false })} />}
       {palOpen && <Palette onClose={() => set({ palOpen: false })} />}
+      <NotificationsPanel />
       <Toast />
     </div>
   );
@@ -98,7 +120,17 @@ function Palette({ onClose }: { onClose(): void }) {
     const m = (s: string) => !q || s.toLowerCase().includes(q.toLowerCase());
     const out: { g: string; label: string; sub?: string; icon: React.ReactNode; go(): void }[] = [];
     docs.filter((d) => m(d.name)).slice(0, 8).forEach((d) => out.push({ g: T('Documents', 'Documents'), label: d.name, sub: d.format, icon: d.kind === 'video' ? <Clapperboard size={14} /> : <ImageIcon size={14} />, go: () => go(d.kind === 'video' ? 'video' : 'design', d.id) }));
-    NAV.filter((n) => m(T(n.fr, n.en))).forEach((n) => out.push({ g: T('Aller à', 'Go to'), label: T(n.fr, n.en), icon: <n.I size={14} />, go: () => go(n.id) }));
+    NAV.filter((n) => (n.id !== 'admin' || useIdentity.getState().isOwner) && m(T(n.fr, n.en))).forEach((n) => out.push({ g: T('Aller à', 'Go to'), label: T(n.fr, n.en), icon: <n.I size={14} />, go: () => goNav(n.id) }));
+    if (m(T('Documents légaux', 'Legal'))) out.push({ g: T('Aller à', 'Go to'), label: T('Documents légaux', 'Legal'), icon: <Scale size={14} />, go: () => go('legal') });
+    const acts: [string, React.ReactNode, () => void][] = [
+      [T('Nouvelle discussion', 'New chat'), <SquarePen size={14} />, () => go('chat')],
+      [T('Nouveau design', 'New design'), <Plus size={14} />, () => void openEditor('design')],
+      [T('Nouvelle vidéo', 'New video'), <Plus size={14} />, () => void openEditor('video')],
+      [T('Changer de thème', 'Switch theme'), <SunMoon size={14} />, () => useApp.getState().cycleMode()],
+      [T('Passer en anglais', 'Switch to French'), <Languages size={14} />, () => useApp.getState().toggleLang()],
+      [T('Raccourcis clavier', 'Keyboard shortcuts'), <Keyboard size={14} />, () => useApp.getState().set({ kbOpen: true })],
+    ];
+    acts.filter(([l]) => m(l)).forEach(([label, icon, fn]) => out.push({ g: T('Actions', 'Actions'), label, icon, go: fn }));
     FORMATS.filter((f) => m(T(f.fr, f.en) + ' ' + f.dims)).forEach((f) => out.push({ g: T('Créer', 'Create'), label: T(f.fr, f.en), sub: f.dims, icon: <Plus size={14} />, go: () => void newFromFormat(f) }));
     return out;
   }, [q, docs, T, go]);

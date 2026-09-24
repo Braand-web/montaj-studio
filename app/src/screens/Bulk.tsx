@@ -9,6 +9,7 @@ import { PageView } from '../design/ElementView';
 import { newDesignFromData } from '../lib/create';
 import { canvasBlob, renderPage } from '../design/render';
 import { saveFile } from '../lib/claude';
+import { notify as pushNotif } from '../lib/notify';
 
 const SAMPLE = 'nom;poste;telephone;email\nAwa Diallo;Directrice;+221 77 123 45 67;awa@techlab.sn\nKoffi Mensah;Monteur vidéo;+228 90 11 22 33;koffi@techlab.sn\nSara Benali;Community manager;+212 6 12 34 56 78;sara@techlab.sn\nJean Mukendi;Cadreur;;jean@techlab.sn\nFatou Ndiaye;Graphiste;+221 76 555 01 02;fatou@techlab.sn\nYanis Haddad;Son et mixage;+213 5 50 12 34 56;yanis@techlab.sn';
 type Field = 'nom' | 'poste' | 'telephone' | 'email';
@@ -39,6 +40,7 @@ export function Bulk() {
   const generate = async () => {
     if (!cards.length) return;
     await newDesignFromData(T('Cartes de visite — équipe', 'Business cards — team'), { pages: cards.map((c) => businessCardPage(c.v)) }, false);
+    pushNotif({ kind: 'system', text: T(`${cards.length} cartes de visite générées`, `${cards.length} business cards generated`), to: 'home' });
     notify(T(`${cards.length} cartes générées dans le document « Cartes de visite — équipe ». Chaque carte reste modifiable.`, `${cards.length} cards generated in the “Business cards — team” document. Each card stays editable.`));
   };
   const exportZip = async () => {

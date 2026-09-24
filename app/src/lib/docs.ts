@@ -49,9 +49,15 @@ export async function purgeDoc(id: string) {
 }
 
 // Documents in the trash for more than 30 days are removed at startup.
-export async function sweepTrash() {
+export async function sweepTrash(): Promise<{ purged: number; soon: number }> {
   const limit = Date.now() - 30 * 86400_000;
-  for (const d of await listDocs()) if (d.trashedAt && d.trashedAt < limit) await purgeDoc(d.id);
+  let purged = 0, soon = 0;
+  for (const d of await listDocs()) {
+    if (!d.trashedAt) continue;
+    if (d.trashedAt < limit) { await purgeDoc(d.id); purged++; }
+    else if (d.trashedAt < limit + 3 * 86400_000) soon++;
+  }
+  return { purged, soon };
 }
 
 export async function listVersions(docId: string): Promise<Version[]> {

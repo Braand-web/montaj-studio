@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack } from 'lucide-react';
+import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack, LayoutGrid } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useVideo, V, newClip, freeTrack, trackEnd, duration, defaultFx, videoSnapshot, fmtDur } from './store';
 import { Engine } from './engine';
@@ -18,6 +18,7 @@ import { recordCanvas, bestVideoMime, canRecord } from '../lib/record';
 import { tc, uid, slug } from '../lib/util';
 import { FONTS, FONT_KEYS } from '../model/fonts';
 import { canvasBlob } from '../design/render';
+import { notify as pushNotif } from '../lib/notify';
 
 type LTab = 'media' | 'text' | 'audio' | 'captions' | 'effects' | 'transitions' | 'filters';
 const LTABS: { id: LTab; fr: string; en: string; c: string; I: typeof Type }[] = [
@@ -163,6 +164,7 @@ function Header({ onDialog }: { onDialog(d: 'export' | 'versions'): void }) {
   return (
     <header className="ed-header">
       <button className="logo-btn" onClick={() => { engine?.pause(); go('home'); }} title={T('Accueil', 'Home')}><LogoMark /></button>
+      <button className="btn bare" style={{ height: 30, padding: '0 8px', flex: 'none' }} onClick={() => useApp.getState().set({ palOpen: true })} title={T('Aller à… (⌘K)', 'Go to… (⌘K)')}><LayoutGrid size={14} /><span className="mono" style={{ fontSize: 10, padding: '1px 5px', borderRadius: 5, background: 'var(--panel2)', color: 'var(--tx3)' }}>⌘K</span></button>
       <div className="col" style={{ lineHeight: 1.2, minWidth: 0 }}>
         <input id="vdoc-name" value={doc.name} onChange={(e) => useVideo.getState().rename(e.target.value)} style={{ fontWeight: 600, border: 0, background: 'transparent', outline: 'none', padding: 0, width: 240 }} />
         <span className="faint row" style={{ fontSize: 11, gap: 4 }}><CloudCheck size={11} color="var(--accTx)" />{T('Enregistré · sur cet appareil', 'Saved · on this device')}</span>
@@ -632,6 +634,7 @@ function ExportVideo({ onClose }: { onClose(): void }) {
       const c = document.createElement('canvas');
       const blob = await engine.exportTo(c, (d, draw, audio) => recordCanvas(c, d, draw, (pct) => setSt((s) => ({ ...s, pct })), () => cancel.current, audio, 30, q * 1_000_000));
       setSt({ phase: 'done', pct: 100, blob, file: `${slug(name)}.${vm.ext}` });
+      pushNotif({ kind: 'export', text: T(`Vidéo exportée : ${slug(name)}.${vm.ext}`, `Video exported: ${slug(name)}.${vm.ext}`), to: 'video' });
     } catch (e) {
       if ((e as Error).message !== 'cancel') notify(T('L’export a échoué : ', 'Export failed: ') + (e as Error).message, 'err');
       setSt({ phase: 'idle', pct: 0 });

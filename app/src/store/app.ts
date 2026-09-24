@@ -5,8 +5,8 @@ import type { BrandKit } from '../model/types';
 export const APP_NAME = 'Montaj Studio';
 
 export type Screen =
-  | 'onboarding' | 'home' | 'library' | 'templates' | 'bulk' | 'planner' | 'brand'
-  | 'assistant' | 'trash' | 'settings' | 'design' | 'video';
+  | 'onboarding' | 'home' | 'chat' | 'credits' | 'feedback' | 'library' | 'templates' | 'bulk' | 'planner' | 'team' | 'brand'
+  | 'providers' | 'usage' | 'trash' | 'settings' | 'admin' | 'legal' | 'design' | 'video';
 
 export type Lang = 'fr' | 'en';
 export type Mode = 'system' | 'dark' | 'light';

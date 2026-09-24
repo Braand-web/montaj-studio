@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Montaj Studio — Crée, monte et génère au même endroit</title>
+<link rel="stylesheet" href="https://unpkg.com/lucide-static@0.460.0/font/lucide.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&amp;display=swap">
+<style>
+html,body{margin:0;padding:0;background:#FFFFFF;}
+*{box-sizing:border-box;}
+body{font-family:-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Geist', 'Helvetica Neue', sans-serif; color:#1D1D1F; -webkit-font-smoothing:antialiased;}
+a{color:inherit; text-decoration:none;} a:hover{opacity:.85;}
+button{font-family:inherit; transition:filter .15s ease, background-color .15s ease, transform .15s ease;}
+button:hover{filter:brightness(1.08);}
+[class^="icon-"], [class*=" icon-"]{line-height:1; display:inline-block;}
+@keyframes ms-up{from{opacity:0; transform:translateY(14px)}to{opacity:1; transform:none}}
+
+</style>
+</helmet>
+<div style="position:relative; min-height:100vh; background:#FFFFFF; overflow-x:hidden;">
+
+  <div style="position:sticky; top:16px; z-index:50; display:flex; justify-content:center; padding:0 12px; pointer-events:none;">
+    <div style="pointer-events:auto; position:relative; width:100%; max-width:{{ navMax }}; border-radius:24px; background:{{ navBg }}; backdrop-filter:saturate(180%) blur(20px); box-shadow:{{ navShadow }}; padding:6px; transition:max-width .3s ease, box-shadow .3s ease, background-color .3s ease;">
+      <div style="display:flex; align-items:center; gap:4px;">
+        <a href="#top" style="width:40px; height:40px; border-radius:12px; background:linear-gradient(145deg,#0A84FF,#7D5CFF 58%,#BF5AF2); display:flex; align-items:center; justify-content:center; box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 4px 14px rgba(125,92,255,.45); flex:none; margin-right:8px;"><span style="display:flex; align-items:flex-end; gap:3px; height:18px; margin-top:5px;"><span data-bar="0" style="width:5px; height:100%; border-radius:3px; background:#FFFFFF; transform-origin:bottom;"></span><span style="position:relative; width:5px; height:52%; border-radius:3px; background:#FFFFFF;"><span data-spark="1" style="position:absolute; left:50%; top:-8px; width:5px; height:5px; margin-left:-2.5px; border-radius:50%; background:#FFD60A; box-shadow:0 0 5px rgba(255,214,10,.8);"></span></span><span data-bar="1" style="width:5px; height:100%; border-radius:3px; background:#FFFFFF; transform-origin:bottom;"></span></span></a>
+        <button onClick="{{ toggleMenu }}" style="height:40px; padding:0 12px; border:0; border-radius:12px; background:transparent; color:{{ featColor }}; font-size:15px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px;">Fonctionnalités<i class="icon-{{ chev }}" style="font-size:14px;"></i></button>
+        <a href="#tarifs" style="height:40px; padding:0 12px; border-radius:12px; color:#AEAEB2; font-size:15px; font-weight:600; display:flex; align-items:center;">Tarifs</a>
+        <a href="#faq" style="height:40px; padding:0 12px; border-radius:12px; color:#AEAEB2; font-size:15px; font-weight:600; display:flex; align-items:center;">FAQ</a>
+        <div style="flex:1;"></div>
+        <a href="Montaj Studio.dc.html#/auth" style="height:40px; padding:0 12px; color:#AEAEB2; font-size:15px; font-weight:600; display:flex; align-items:center;">Connexion</a>
+        <a href="Montaj Studio.dc.html#/home" style="height:40px; padding:0 18px; border-radius:14px; background:#0A84FF; color:#FFFFFF; font-size:15px; font-weight:600; display:flex; align-items:center; gap:8px; box-shadow:inset 0 1px 0 rgba(255,255,255,.3), 0 0 0 3px rgba(10,132,255,.25);"><i class="icon-sparkles" style="font-size:15px;"></i>Commencer</a>
+      </div>
+      <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:6px; padding:6px 0 0;">
+          <sc-for list="{{ menu }}" as="mi" hint-placeholder-count="6"><a href="{{ mi.href }}" onClick="{{ closeMenu }}" style="display:flex; flex-direction:column; gap:4px; padding:18px; border-radius:18px; background:{{ mi.tint }}; color:#FFFFFF;"><span style="width:38px; height:38px; border-radius:19px; background:{{ mi.c }}; display:flex; align-items:center; justify-content:center; margin-bottom:10px;"><i class="icon-{{ mi.icon }}" style="font-size:18px; color:#111113;"></i></span><span style="font-size:17px; font-weight:700;">{{ mi.title }}</span><span style="font-size:14px; color:rgba(255,255,255,.72); line-height:1.4;">{{ mi.text }}</span></a></sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <section id="top" data-screen-label="Hero" style="position:relative; padding:110px 24px 40px; display:flex; flex-direction:column; align-items:center; gap:24px; text-align:center;">
+    <div style="position:absolute; inset:-120px 0 -200px; pointer-events:none; overflow:hidden; z-index:0;">
+      <div data-orb="0" style="position:absolute; left:8%; top:10%; width:420px; height:420px; border-radius:50%; background:radial-gradient(circle, rgba(10,132,255,.28), rgba(10,132,255,0) 65%); filter:blur(10px);"></div>
+      <div data-orb="1" style="position:absolute; right:6%; top:0; width:480px; height:480px; border-radius:50%; background:radial-gradient(circle, rgba(191,90,242,.26), rgba(191,90,242,0) 65%); filter:blur(10px);"></div>
+      <div data-orb="2" style="position:absolute; left:38%; top:42%; width:360px; height:360px; border-radius:50%; background:radial-gradient(circle, rgba(255,159,10,.2), rgba(255,159,10,0) 65%); filter:blur(10px);"></div>
+    </div>
+    <div data-float="0" style="position:relative; z-index:1; width:88px; height:88px; border-radius:26px; background:linear-gradient(145deg,#0A84FF,#7D5CFF 58%,#BF5AF2); display:flex; align-items:center; justify-content:center; box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 24px 60px rgba(125,92,255,.45);"><span style="display:flex; align-items:flex-end; gap:6px; height:40px; margin-top:11px;"><span data-bar="0" style="width:11px; height:100%; border-radius:6px; background:#FFFFFF; transform-origin:bottom;"></span><span style="position:relative; width:11px; height:52%; border-radius:6px; background:#FFFFFF;"><span data-spark="1" style="position:absolute; left:50%; top:-18px; width:11px; height:11px; margin-left:-5.5px; border-radius:50%; background:#FFD60A; box-shadow:0 0 11px rgba(255,214,10,.8);"></span></span><span data-bar="1" style="width:11px; height:100%; border-radius:6px; background:#FFFFFF; transform-origin:bottom;"></span></span></div>
+    <span data-rise="0" style="position:relative; z-index:1; height:32px; padding:0 14px; border-radius:16px; background:#F2F2F7; color:#48484A; font-size:14px; font-weight:500; display:inline-flex; align-items:center; gap:8px;"><span style="width:8px; height:8px; border-radius:4px; background:#30D158;"></span>Nouveau : Studio Chat génère images, vidéos et pubs UGC</span>
+    <h1 style="position:relative; z-index:1; margin:0; max-width:980px; font-size:clamp(44px, 7vw, 88px); line-height:1.08; font-weight:700; letter-spacing:-.045em; display:flex; flex-wrap:wrap; justify-content:center; column-gap:.24em;"><sc-for list="{{ heroWords }}" as="hw" hint-placeholder-count="3"><sc-if value="{{ hw.plain }}" hint-placeholder-val="{{ true }}"><span data-w="1" style="display:inline-block;">{{ hw.w }}</span></sc-if><sc-if value="{{ hw.grad }}" hint-placeholder-val="{{ false }}"><span data-w="1" style="display:inline-block; background:linear-gradient(90deg,#0A84FF,#BF5AF2 55%,#FF375F); -webkit-background-clip:text; background-clip:text; color:transparent;">{{ hw.w }}</span></sc-if></sc-for></h1>
+    <p data-rise="1" style="position:relative; z-index:1; margin:0; max-width:640px; font-size:clamp(17px, 1.6vw, 21px); line-height:1.5; color:#6E6E73; text-wrap:pretty;">Montaj Studio réunit un éditeur vidéo, un éditeur de design et une IA qui crée pour toi, dans le navigateur. Les éditeurs sont gratuits, sans filigrane.</p>
+    <div data-rise="2" style="position:relative; z-index:1; display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+      <a href="Montaj Studio.dc.html#/home" style="height:52px; padding:0 26px; border-radius:18px; background:#0A84FF; color:#FFFFFF; font-size:17px; font-weight:600; display:flex; align-items:center; gap:8px; box-shadow:0 10px 30px rgba(10,132,255,.35);">Commencer gratuitement<i class="icon-arrow-right" style="font-size:17px;"></i></a>
+      <a href="Montaj Studio.dc.html#/chat" style="height:52px; padding:0 22px; border-radius:18px; background:#F2F2F7; color:#1D1D1F; font-size:17px; font-weight:600; display:flex; align-items:center; gap:8px;"><i class="icon-sparkles" style="font-size:16px; color:#BF5AF2;"></i>Essayer Studio Chat</a>
+    </div>
+    <span data-rise="3" style="position:relative; z-index:1; font-size:13px; color:#8E8E93;">Sans carte bancaire · 50 crédits IA offerts · Fonctionne sur Chrome, Edge, Safari et Firefox</span>
+  </section>
+
+  <section data-screen-label="Aperçu" style="padding:30px 24px 80px; display:flex; justify-content:center;">
+    <div data-reveal="0" style="position:relative; width:100%; max-width:1180px; border-radius:30px; padding:14px; background:linear-gradient(160deg,#E8F2FF,#F4ECFF 55%,#FFF1E6); box-shadow:0 40px 120px rgba(10,60,140,.18); transform:perspective(1800px) rotateX({{ tiltX }}); transition:transform .2s linear;">
+      <div style="border-radius:20px; overflow:hidden; background:#111113; display:grid; grid-template-columns:minmax(0,190px) minmax(0,1fr) minmax(0,260px); min-height:520px;">
+        <div style="background:#1C1C1E; padding:16px 12px; display:flex; flex-direction:column; gap:6px;">
+          <div style="display:flex; align-items:center; gap:8px; padding:4px 6px 12px;"><span style="width:26px; height:26px; border-radius:8px; background:linear-gradient(145deg,#0A84FF,#7D5CFF 58%,#BF5AF2); display:flex; align-items:center; justify-content:center;"><span style="display:flex; align-items:flex-end; gap:2px; height:12px; margin-top:3px;"><span data-bar="0" style="width:3px; height:100%; border-radius:2px; background:#FFFFFF; transform-origin:bottom;"></span><span style="position:relative; width:3px; height:52%; border-radius:2px; background:#FFFFFF;"><span data-spark="1" style="position:absolute; left:50%; top:-5px; width:3px; height:3px; margin-left:-1.5px; border-radius:50%; background:#FFD60A; box-shadow:0 0 3px rgba(255,214,10,.8);"></span></span><span data-bar="1" style="width:3px; height:100%; border-radius:2px; background:#FFFFFF; transform-origin:bottom;"></span></span></span><span style="color:#F5F5F7; font-size:13px; font-weight:600;">Studio Chat</span></div>
+          <sc-for list="{{ mockThreads }}" as="t" hint-placeholder-count="4"><div style="height:32px; padding:0 10px; border-radius:9px; background:{{ t.bg }}; color:#D1D1D6; font-size:12px; display:flex; align-items:center; gap:8px; white-space:nowrap; overflow:hidden;"><i class="icon-message-circle" style="font-size:12px; color:#8E8E93;"></i>{{ t.label }}</div></sc-for>
+        </div>
+        <div style="padding:22px; display:flex; flex-direction:column; gap:14px; min-width:0;">
+          <div style="align-self:flex-end; max-width:78%; padding:10px 14px; border-radius:18px 18px 6px 18px; background:#0A84FF; color:#FFFFFF; font-size:14px;">Pub UGC TikTok pour ma crème au karité, ton naturel</div>
+          <div style="display:flex; gap:10px; align-items:flex-start;"><span style="width:28px; height:28px; border-radius:14px; background:linear-gradient(135deg,#0A84FF,#BF5AF2); display:flex; align-items:center; justify-content:center; flex:none;"><i class="icon-sparkles" style="font-size:13px; color:#FFFFFF;"></i></span><div style="display:flex; flex-direction:column; gap:10px; min-width:0; flex:1;"><span style="color:#F5F5F7; font-size:14px;">Voici le storyboard en 4 plans. J’ai ajouté la voix off, les sous-titres et une musique libre de droits.</span>
+            <div style="display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; max-width:520px;"><sc-for list="{{ mockShots }}" as="sh" hint-placeholder-count="4"><div style="aspect-ratio:9/16; border-radius:12px; background:{{ sh.bg }}; position:relative; opacity:{{ sh.op }}; transform:{{ sh.tf }}; transition:opacity .45s ease, transform .45s cubic-bezier(.2,.8,.2,1);"><span style="position:absolute; left:6px; bottom:6px; right:6px; padding:3px 6px; border-radius:6px; background:rgba(20,20,22,.6); color:#FFFFFF; font-size:10px; backdrop-filter:blur(8px);">{{ sh.label }}</span></div></sc-for></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;"><span style="height:30px; padding:0 14px; border-radius:15px; background:#0A84FF; color:#FFFFFF; font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px;"><i class="icon-download" style="font-size:12px;"></i>Exporter MP4</span><span style="height:30px; padding:0 12px; border-radius:15px; background:#2C2C2E; color:#F5F5F7; font-size:12px; display:flex; align-items:center; gap:6px;"><i class="icon-shuffle" style="font-size:12px;"></i>Autre accroche</span></div>
+          </div></div>
+          <div style="margin-top:auto; border-radius:20px; background:#1C1C1E; border:1px solid #3A3A3C; padding:12px 14px; display:flex; align-items:center; gap:10px; color:#8E8E93; font-size:13px;"><span style="flex:1; color:#F5F5F7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ typed }}<span data-caret="1" style="display:inline-block; width:2px; height:15px; margin-left:2px; background:#0A84FF; vertical-align:-2px;"></span></span><span style="height:26px; padding:0 10px; border-radius:13px; background:rgba(48,209,88,.16); color:#30D158; font-size:11px; display:flex; align-items:center; gap:4px;"><i class="icon-coins" style="font-size:11px;"></i>1 240 crédits</span><span style="width:32px; height:32px; border-radius:16px; background:#0A84FF; display:flex; align-items:center; justify-content:center;"><i class="icon-arrow-up" style="font-size:15px; color:#FFFFFF;"></i></span></div>
+        </div>
+        <div style="background:#1C1C1E; padding:16px; display:flex; flex-direction:column; gap:10px;">
+          <span style="color:#8E8E93; font-size:11px; letter-spacing:.06em; text-transform:uppercase;">Générations</span>
+          <sc-for list="{{ mockJobs }}" as="j" hint-placeholder-count="4"><div style="display:flex; align-items:center; gap:10px;"><span style="width:38px; height:38px; border-radius:10px; background:{{ j.bg }}; flex:none;"></span><span style="display:flex; flex-direction:column; gap:2px; min-width:0;"><span style="color:#F5F5F7; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ j.label }}</span><span style="color:{{ j.c }}; font-size:11px;">{{ j.st }}</span><sc-if value="{{ j.bar }}" hint-placeholder-val="{{ false }}"><span style="display:block; width:120px; height:3px; border-radius:2px; background:#3A3A3C; overflow:hidden; margin-top:3px;"><span style="display:block; height:100%; width:{{ j.pct }}; background:#FF9F0A;"></span></span></sc-if></span></div></sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen-label="Pour qui" style="padding:0 24px 90px; display:flex; flex-direction:column; align-items:center; gap:22px;">
+    <span style="font-size:15px; color:#8E8E93;">Pensé pour ceux qui créent tous les jours</span>
+    <div style="width:100%; max-width:1200px; overflow:hidden; -webkit-mask-image:linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image:linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);"><div data-marquee="1" style="display:flex; gap:48px; width:max-content;"><sc-for list="{{ audiences }}" as="au" hint-placeholder-count="8"><span style="display:flex; align-items:center; gap:8px; font-size:19px; font-weight:600; color:#AEAEB2; white-space:nowrap;"><i class="icon-{{ au.icon }}" style="font-size:19px;"></i>{{ au.label }}</span></sc-for></div></div>
+  </section>
+
+  <section data-screen-label="Bande sombre" style="background:#1D1D1F; border-radius:36px 36px 0 0; padding:110px 24px; display:flex; flex-direction:column; align-items:center; gap:56px; text-align:center;">
+    <h2 data-reveal="0" style="margin:0; max-width:760px; color:#F5F5F7; font-size:clamp(30px, 3.4vw, 44px); line-height:1.15; font-weight:600; letter-spacing:-.03em; text-wrap:balance;">Montaj n’est pas qu’un éditeur. C’est tout ce qui vient avant et après.</h2>
+    <div style="display:flex; gap:28px 56px; flex-wrap:wrap; justify-content:center;"><sc-for list="{{ pillars }}" as="p" hint-placeholder-count="5"><a href="{{ p.href }}" data-reveal="{{ p.i }}" style="display:flex; flex-direction:column; align-items:center; gap:14px; color:#F5F5F7; transition:transform .25s ease;" style-hover="transform:translateY(-6px);"><i class="icon-{{ p.icon }}" style="font-size:44px; color:#AEAEB2;"></i><span style="font-size:17px; font-weight:500;">{{ p.label }}</span></a></sc-for></div>
+  </section>
+
+  <div style="background:#FFFFFF; border-radius:36px 36px 0 0; margin-top:-36px; position:relative;">
+    <sc-for list="{{ features }}" as="f" hint-placeholder-count="4">
+      <section id="{{ f.id }}" data-screen-label="{{ f.badge }}" style="padding:110px 24px 40px; display:flex; justify-content:center;">
+        <div style="width:100%; max-width:1180px; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr)); gap:56px; align-items:center;">
+          <div data-reveal="0" style="order:{{ f.textOrder }}; display:flex; flex-direction:column; gap:22px; padding:0 8px;">
+            <span style="align-self:flex-start; height:40px; padding:0 16px; border-radius:20px; background:{{ f.soft }}; color:{{ f.ink }}; font-size:16px; font-weight:600; display:inline-flex; align-items:center; gap:8px;"><i class="icon-{{ f.icon }}" style="font-size:17px;"></i>{{ f.badge }}</span>
+            <h2 style="margin:0; font-size:clamp(32px, 3.4vw, 46px); line-height:1.08; font-weight:600; letter-spacing:-.035em; text-wrap:balance;">{{ f.title }}</h2>
+            <div style="display:flex; flex-direction:column; gap:14px; margin-top:8px;"><sc-for list="{{ f.points }}" as="pt" hint-placeholder-count="3"><span data-reveal="2" style="display:flex; gap:12px; align-items:flex-start; font-size:18px; line-height:1.4; color:#1D1D1F;"><span style="width:22px; height:22px; border-radius:11px; background:{{ f.c }}; display:flex; align-items:center; justify-content:center; flex:none; margin-top:2px;"><i class="icon-check" style="font-size:13px; color:#FFFFFF;"></i></span><span style="text-wrap:pretty;">{{ pt }}</span></span></sc-for></div>
+          </div>
+          <div data-reveal="1" style="order:{{ f.visOrder }}; position:relative; border-radius:40px; padding:40px 24px; min-height:420px; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 50% 50%, {{ f.glow }}, rgba(255,255,255,0) 70%);">
+            <sc-if value="{{ f.isChat }}" hint-placeholder-val="{{ false }}"><div style="width:100%; max-width:440px; border-radius:24px; background:#FFFFFF; box-shadow:0 30px 80px rgba(0,0,0,.14); padding:16px; display:flex; flex-direction:column; gap:12px;"><div style="align-self:flex-end; padding:9px 13px; border-radius:16px 16px 5px 16px; background:#0A84FF; color:#FFFFFF; font-size:13px;">Photo produit du Pixel 11 sur fond minéral</div><div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"><sc-for list="{{ chatImgs }}" as="ci" hint-placeholder-count="4"><div style="aspect-ratio:4/5; border-radius:14px; background:{{ ci.bg }}; opacity:{{ ci.op }}; transform:{{ ci.tf }}; transition:opacity .5s ease, transform .5s cubic-bezier(.2,.8,.2,1);"></div></sc-for></div><div style="display:flex; gap:6px; justify-content:center;"><sc-for list="{{ chatActs }}" as="ca" hint-placeholder-count="5"><span style="height:28px; padding:0 10px; border-radius:14px; background:#F2F2F7; font-size:12px; display:flex; align-items:center; gap:5px;"><i class="icon-{{ ca.icon }}" style="font-size:12px;"></i>{{ ca.label }}</span></sc-for></div></div></sc-if>
+            <sc-if value="{{ f.isVideo }}" hint-placeholder-val="{{ false }}"><div style="width:100%; max-width:500px; border-radius:22px; background:#1C1C1E; box-shadow:0 30px 80px rgba(0,0,0,.25); padding:14px; display:flex; flex-direction:column; gap:12px;"><div style="aspect-ratio:16/9; border-radius:14px; background:{{ videoBg }}; position:relative;"><span style="position:absolute; left:10%; right:10%; bottom:14%; display:flex; justify-content:center;"><span style="padding:4px 10px; border-radius:8px; background:#FFFFFF; color:#111113; font-weight:800; font-size:15px;">{{ capWord }}</span></span></div><div style="position:relative; display:flex; flex-direction:column; gap:5px;"><div style="position:absolute; top:-6px; bottom:-6px; left:{{ playhead }}; width:2px; margin-left:-1px; border-radius:1px; background:#FFFFFF; box-shadow:0 0 10px rgba(255,255,255,.7); z-index:2;"></div><sc-for list="{{ tracks }}" as="tr" hint-placeholder-count="4"><div style="display:flex; gap:4px; height:22px;"><sc-for list="{{ tr }}" as="cl" hint-placeholder-count="3"><div style="flex:{{ cl.f }}; border-radius:6px; background:{{ cl.c }}; opacity:{{ cl.o }};"></div></sc-for></div></sc-for></div></div></sc-if>
+            <sc-if value="{{ f.isDesign }}" hint-placeholder-val="{{ false }}"><div style="position:relative; width:100%; max-width:460px; display:flex; justify-content:center;"><div style="width:280px; aspect-ratio:4/5; border-radius:18px; background:{{ designBg }}; box-shadow:0 30px 80px rgba(0,0,0,.2); position:relative; overflow:hidden;"><div style="position:absolute; inset:auto 18px 22px 18px; display:flex; flex-direction:column; gap:6px;"><span style="color:#FFFFFF; font-size:30px; font-weight:800; letter-spacing:-.02em; line-height:1;">SOIRÉE DE LANCEMENT</span><span style="color:#FFFFFF; font-size:13px;">Samedi 26 septembre · 18 h</span></div><div data-pulse="1" style="position:absolute; top:14px; left:14px; right:14px; bottom:120px; border:1.5px dashed rgba(255,255,255,.9); border-radius:8px;"></div></div><div data-float="1" style="position:absolute; right:0; top:30px; width:170px; border-radius:16px; background:#FFFFFF; box-shadow:0 20px 50px rgba(0,0,0,.15); padding:10px; display:flex; flex-direction:column; gap:4px;"><span style="font-size:11px; color:#8E8E93; padding:2px 6px;">Calques</span><sc-for list="{{ layers }}" as="ly" hint-placeholder-count="4"><span style="height:28px; padding:0 8px; border-radius:8px; background:{{ ly.bg }}; transition:background-color .3s ease; font-size:12px; display:flex; align-items:center; gap:6px;"><i class="icon-{{ ly.icon }}" style="font-size:12px; color:#8E8E93;"></i>{{ ly.label }}</span></sc-for></div></div></sc-if>
+            <sc-if value="{{ f.isKeys }}" hint-placeholder-val="{{ false }}"><div style="width:100%; max-width:460px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;"><sc-for list="{{ provs }}" as="pv" hint-placeholder-count="9"><div style="aspect-ratio:1; border-radius:20px; background:#FFFFFF; box-shadow:{{ pv.sh }}; transform:{{ pv.tf }}; transition:transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:8px; text-align:center;"><span style="width:36px; height:36px; border-radius:18px; background:{{ pv.c }}; display:flex; align-items:center; justify-content:center;"><i class="icon-{{ pv.icon }}" style="font-size:16px; color:#111113;"></i></span><span style="font-size:12px; font-weight:600;">{{ pv.name }}</span></div></sc-for></div></sc-if>
+          </div>
+        </div>
+      </section>
+    </sc-for>
+
+    <section id="tarifs" data-screen-label="Tarifs" style="padding:120px 24px 60px; display:flex; flex-direction:column; align-items:center; gap:40px;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center;"><span style="height:34px; padding:0 14px; border-radius:17px; background:#F2F2F7; color:#48484A; font-size:14px; font-weight:500; display:inline-flex; align-items:center;">Tarifs</span><h2 style="margin:0; max-width:760px; font-size:clamp(34px, 4vw, 54px); line-height:1.05; font-weight:700; letter-spacing:-.04em; text-wrap:balance;">Les éditeurs sont gratuits. L’IA, tu choisis comment la payer.</h2></div>
+      <div style="width:100%; max-width:1100px; display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px;">
+        <sc-for list="{{ plans }}" as="pl" hint-placeholder-count="3"><div data-reveal="{{ pl.i }}" style="transition:transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease;" style-hover="transform:translateY(-6px); box-shadow:0 24px 60px rgba(0,0,0,.14);"><div style="height:100%; border-radius:28px; background:{{ pl.bg }}; color:{{ pl.tx }}; padding:28px; display:flex; flex-direction:column; gap:14px; border:1px solid {{ pl.border }};">
+          <span style="width:42px; height:42px; border-radius:21px; background:{{ pl.c }}; display:flex; align-items:center; justify-content:center;"><i class="icon-{{ pl.icon }}" style="font-size:19px; color:#111113;"></i></span>
+          <span style="font-size:21px; font-weight:700;">{{ pl.name }}</span>
+          <div style="display:flex; align-items:baseline; gap:6px;"><span style="font-size:44px; font-weight:700; letter-spacing:-.04em;">{{ pl.price }}</span><span style="font-size:15px; opacity:.65;">{{ pl.per }}</span></div>
+          <span style="font-size:15px; opacity:.75; line-height:1.45; text-wrap:pretty;">{{ pl.desc }}</span>
+          <div style="display:flex; flex-direction:column; gap:10px; margin:6px 0 10px;"><sc-for list="{{ pl.feats }}" as="ft" hint-placeholder-count="4"><span style="display:flex; gap:10px; font-size:15px; line-height:1.4; align-items:flex-start;"><span style="width:20px; height:20px; border-radius:10px; background:{{ pl.c }}; display:flex; align-items:center; justify-content:center; flex:none; margin-top:1px;"><i class="icon-check" style="font-size:12px; color:#111113;"></i></span><span style="text-wrap:pretty;">{{ ft }}</span></span></sc-for></div>
+          <a href="{{ pl.href }}" style="margin-top:auto; height:48px; border-radius:16px; background:{{ pl.btnBg }}; color:{{ pl.btnTx }}; font-size:16px; font-weight:600; display:flex; align-items:center; justify-content:center;">{{ pl.btn }}</a>
+        </div></div></sc-for>
+      </div>
+      <div data-reveal="0" style="width:100%; max-width:1100px; border-radius:28px; background:#F5F5F7; padding:26px 28px; display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; align-items:center;">
+        <div style="display:flex; flex-direction:column; gap:6px;"><span style="font-size:19px; font-weight:700; letter-spacing:-.02em;">Packs de crédits</span><span style="font-size:14px; color:#6E6E73;">Valables 12 mois. Wave, Orange Money, carte ou PayPal.</span></div>
+        <sc-for list="{{ packs }}" as="pk" hint-placeholder-count="4"><div style="border-radius:18px; background:#FFFFFF; padding:16px; display:flex; flex-direction:column; gap:2px; border:1px solid {{ pk.border }};"><span style="font-size:22px; font-weight:700; letter-spacing:-.02em;">{{ pk.cr }}</span><span style="font-size:13px; color:#8E8E93;">crédits</span><span style="font-size:17px; font-weight:600; margin-top:6px;">{{ pk.price }}</span></div></sc-for>
+      </div>
+    </section>
+
+    <section id="faq" data-screen-label="FAQ" style="padding:80px 24px 100px; display:flex; flex-direction:column; align-items:center; gap:30px;">
+      <h2 style="margin:0; font-size:clamp(32px, 3.6vw, 48px); font-weight:700; letter-spacing:-.04em;">Questions fréquentes</h2>
+      <div style="width:100%; max-width:780px; display:flex; flex-direction:column; gap:10px;">
+        <sc-for list="{{ faq }}" as="q" hint-placeholder-count="6"><div data-reveal="{{ q.i }}" style="border-radius:20px; background:#F5F5F7; overflow:hidden;"><button onClick="{{ q.toggle }}" style="width:100%; min-height:64px; padding:16px 22px; border:0; background:transparent; color:#1D1D1F; font-size:17px; font-weight:600; text-align:left; cursor:pointer; display:flex; align-items:center; gap:16px;"><span style="flex:1;">{{ q.q }}</span><i class="icon-{{ q.icon }}" style="font-size:18px; color:#8E8E93;"></i></button><sc-if value="{{ q.open }}" hint-placeholder-val="{{ false }}"><p style="margin:0; padding:0 22px 20px; font-size:16px; line-height:1.55; color:#48484A; text-wrap:pretty;">{{ q.a }}</p></sc-if></div></sc-for>
+      </div>
+    </section>
+
+    <section data-screen-label="Appel final" style="padding:0 24px 80px; display:flex; justify-content:center;">
+      <div data-reveal="0" style="position:relative; overflow:hidden; width:100%; max-width:1180px; border-radius:40px; padding:90px 24px; background:radial-gradient(ellipse at 30% 20%, rgba(10,132,255,.55), rgba(10,132,255,0) 55%), radial-gradient(ellipse at 80% 80%, rgba(191,90,242,.5), rgba(191,90,242,0) 55%), #111113; display:flex; flex-direction:column; align-items:center; gap:22px; text-align:center;">
+        <div data-float="2" style="width:72px; height:72px; border-radius:22px; background:linear-gradient(145deg,#0A84FF,#7D5CFF 58%,#BF5AF2); display:flex; align-items:center; justify-content:center; box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 20px 50px rgba(125,92,255,.5);"><span style="display:flex; align-items:flex-end; gap:5px; height:33px; margin-top:9px;"><span data-bar="0" style="width:9px; height:100%; border-radius:5px; background:#FFFFFF; transform-origin:bottom;"></span><span style="position:relative; width:9px; height:52%; border-radius:5px; background:#FFFFFF;"><span data-spark="1" style="position:absolute; left:50%; top:-15px; width:9px; height:9px; margin-left:-4.5px; border-radius:50%; background:#FFD60A; box-shadow:0 0 9px rgba(255,214,10,.8);"></span></span><span data-bar="1" style="width:9px; height:100%; border-radius:5px; background:#FFFFFF; transform-origin:bottom;"></span></span></div>
+        <h2 style="margin:0; max-width:720px; color:#FFFFFF; font-size:clamp(34px, 4.4vw, 60px); line-height:1.04; font-weight:700; letter-spacing:-.045em; text-wrap:balance;">Ta prochaine vidéo commence par une phrase.</h2>
+        <p style="margin:0; max-width:520px; color:rgba(255,255,255,.75); font-size:18px; line-height:1.5;">Ouvre Montaj Studio, écris ce que tu veux, et modifie le résultat comme tu l’entends.</p>
+        <a href="Montaj Studio.dc.html#/home" style="height:54px; padding:0 28px; border-radius:18px; background:#FFFFFF; color:#111113; font-size:17px; font-weight:600; display:flex; align-items:center; gap:8px;">Commencer gratuitement<i class="icon-arrow-right" style="font-size:17px;"></i></a>
+      </div>
+    </section>
+
+    <footer style="border-top:1px solid #E5E5EA; padding:36px 24px 48px; display:flex; justify-content:center;">
+      <div style="width:100%; max-width:1180px; display:flex; gap:24px; flex-wrap:wrap; align-items:center; justify-content:space-between; font-size:14px; color:#6E6E73;">
+        <div style="display:flex; align-items:center; gap:10px;"><span style="width:28px; height:28px; border-radius:9px; background:linear-gradient(145deg,#0A84FF,#7D5CFF 58%,#BF5AF2); display:flex; align-items:center; justify-content:center;"><span style="display:flex; align-items:flex-end; gap:2px; height:13px; margin-top:3px;"><span data-bar="0" style="width:4px; height:100%; border-radius:2px; background:#FFFFFF; transform-origin:bottom;"></span><span style="position:relative; width:4px; height:52%; border-radius:2px; background:#FFFFFF;"><span data-spark="1" style="position:absolute; left:50%; top:-6px; width:4px; height:4px; margin-left:-2px; border-radius:50%; background:#FFD60A; box-shadow:0 0 4px rgba(255,214,10,.8);"></span></span><span data-bar="1" style="width:4px; height:100%; border-radius:2px; background:#FFFFFF; transform-origin:bottom;"></span></span></span><span style="color:#1D1D1F; font-weight:600;">Montaj Studio</span><span>© 2026</span></div>
+        <div style="display:flex; gap:22px; flex-wrap:wrap;"><a href="#tarifs">Tarifs</a><a href="#faq">FAQ</a><a href="Montaj Studio.dc.html#/providers">Tes clés API</a><a href="#top">Confidentialité</a><a href="#top">CGU</a></div>
+      </div>
+    </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { menu:false, faq:0, t:0, scrolled:false, tilt:8 };
+  componentDidMount(){
+    this.iv=setInterval(()=>this.setState(s=>({t:s.t+1})),100);
+    this.onScroll=()=>{ const y=(document.scrollingElement||document.documentElement).scrollTop; const sc=y>40; const tilt=Math.max(0, 8-y/60); if(sc!==this.state.scrolled || Math.abs(tilt-this.state.tilt)>.2) this.setState({scrolled:sc, tilt}); };
+    window.addEventListener('scroll', this.onScroll, {passive:true});
+    requestAnimationFrame(()=>requestAnimationFrame(()=>this.setupAnims()));
+  }
+  componentWillUnmount(){ clearInterval(this.iv); window.removeEventListener('scroll', this.onScroll); this.io && this.io.disconnect(); }
+  setupAnims(){
+    if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const E='cubic-bezier(.2,.8,.2,1)', q=sel=>Array.from(document.querySelectorAll(sel));
+    q('[data-w]').forEach((el,i)=>el.animate([{opacity:0, transform:'translateY(45%)', filter:'blur(10px)'},{opacity:1, transform:'none', filter:'blur(0)'}],{duration:800, delay:200+i*110, easing:E, fill:'both'}));
+    q('[data-rise]').forEach(el=>{ const i=+el.dataset.rise; el.animate([{opacity:0, transform:'translateY(16px)'},{opacity:1, transform:'none'}],{duration:700, delay:(i===0?80:600+i*120), easing:E, fill:'both'}); });
+    q('[data-orb]').forEach((el,i)=>el.animate([{transform:'translate(0,0) scale(1)'},{transform:'translate('+(60-i*40)+'px,'+(-40+i*25)+'px) scale(1.18)'},{transform:'translate('+(-50+i*30)+'px,'+(35-i*10)+'px) scale(.92)'},{transform:'translate(0,0) scale(1)'}],{duration:16000+i*4000, iterations:Infinity, easing:'ease-in-out'}));
+    q('[data-float]').forEach((el,i)=>el.animate([{transform:'translateY(0) rotate(0deg)'},{transform:'translateY(-10px) rotate('+(i%2?-1.5:1.5)+'deg)'},{transform:'translateY(0) rotate(0deg)'}],{duration:5200+i*900, iterations:Infinity, easing:'ease-in-out'}));
+    q('[data-bar]').forEach((el,i)=>el.animate([{transform:'scaleY(1)'},{transform:'scaleY(.62)'},{transform:'scaleY(1)'}],{duration:1400, delay:(+el.dataset.bar)*350, iterations:Infinity, easing:'ease-in-out'}));
+    q('[data-spark]').forEach(el=>el.animate([{transform:'scale(1)', opacity:1},{transform:'scale(1.5)', opacity:.7},{transform:'scale(1)', opacity:1}],{duration:1400, iterations:Infinity, easing:'ease-in-out'}));
+    q('[data-caret]').forEach(el=>el.animate([{opacity:1},{opacity:0},{opacity:1}],{duration:1000, iterations:Infinity, easing:'steps(2, jump-none)'}));
+    q('[data-pulse]').forEach(el=>el.animate([{opacity:1},{opacity:.3},{opacity:1}],{duration:1800, iterations:Infinity, easing:'ease-in-out'}));
+    q('[data-marquee]').forEach(el=>el.animate([{transform:'translateX(0)'},{transform:'translateX(-50%)'}],{duration:32000, iterations:Infinity}));
+    const reveal=q('[data-reveal]').map(el=>{ const a=el.animate([{opacity:0, transform:'translateY(34px) scale(.98)'},{opacity:1, transform:'none'}],{duration:850, delay:(+el.dataset.reveal||0)*110, easing:E, fill:'both'}); a.pause(); a.currentTime=0; return [el,a]; });
+    const map=new Map(reveal);
+    this.io=new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ const a=map.get(e.target); if(a){ a.play(); this.io.unobserve(e.target); } } }), {threshold:.12, rootMargin:'0px 0px -40px 0px'});
+    reveal.forEach(([el])=>this.io.observe(el));
+  }
+  renderVals(){
+    const s=this.state;
+    const IMG=(seed,w,h)=>'url(https://picsum.photos/seed/'+seed+'/'+w+'/'+h+') center/cover no-repeat, #E5E5EA';
+    const tint=(c,p)=>'color-mix(in oklab, '+c+' '+(p||22)+'%, #1C1C1E)';
+    const menu=[['sparkles','#BF5AF2','Studio Chat','Images, vidéos et pubs UGC générées en discutant.','#chat'],['clapperboard','#64D2FF','Éditeur vidéo','Timeline multipiste, sous-titres, effets, export 4K.','#video'],['pen-tool','#FF9F0A','Éditeur design','Posts, affiches, miniatures, présentations.','#design'],['cpu','#30D158','IA locale gratuite','Détourage, sous-titres et silences dans ton navigateur.','#video'],['key-round','#0A84FF','Toutes les IA','Crédits intégrés, ou tes propres clés API.','#cles'],['megaphone','#FF375F','Pubs UGC','Script, plans, voix off, sous-titres et musique.','#chat']]
+      .map(m=>({icon:m[0], c:m[1], title:m[2], text:m[3], href:m[4], tint:tint(m[1])}));
+    const feats=[
+      {id:'chat', icon:'sparkles', badge:'Studio Chat', c:'#BF5AF2', soft:'#F4E9FD', ink:'#8E2FC2', glow:'rgba(191,90,242,.22)', title:'Demande-le en une phrase, reçois-le dans la discussion.', points:['Images, vidéos, pubs UGC et avatars générés dans le fil','Réponds à un résultat pour l’ajuster : « la 2, mais de nuit »','Le coût s’affiche avant chaque génération, tu valides d’un clic'], kind:'chat'},
+      {id:'video', icon:'clapperboard', badge:'Éditeur vidéo', c:'#0A84FF', soft:'#E6F1FF', ink:'#0066CC', glow:'rgba(10,132,255,.2)', title:'Un vrai montage, sans rien installer.', points:['Timeline multipiste, keyframes, transitions et effets','Sous-titres mot par mot générés gratuitement dans le navigateur','Export MP4 jusqu’en 4K, sans filigrane'], kind:'video'},
+      {id:'design', icon:'pen-tool', badge:'Éditeur design', c:'#FF9F0A', soft:'#FFF2E0', ink:'#C46A00', glow:'rgba(255,159,10,.22)', title:'Du post Instagram à l’affiche A3.', points:['Calques, guides intelligents, kit de marque et templates','Redimensionnement vers story, miniature ou flyer en un clic','Export PNG, JPG, SVG et PDF impression avec fond perdu'], kind:'design'},
+      {id:'cles', icon:'key-round', badge:'Toutes les IA', c:'#30D158', soft:'#E4F8EA', ink:'#1E8A48', glow:'rgba(48,209,88,.2)', title:'Nos crédits, ou tes propres clés.', points:['Claude, gpt-image-2, Seedance, Higgsfield, ElevenLabs et plus','Avec Pro Clés, branche n’importe quelle API et paie tes fournisseurs directement','Tes clés sont chiffrées et ne sont jamais affichées'], kind:'keys'}];
+    const plans=[
+      {icon:'sparkle', c:'#AEAEB2', name:'Gratuit', price:'0 €', per:'pour toujours', desc:'Les deux éditeurs complets et l’IA qui tourne dans ton navigateur.', feats:['Éditeurs vidéo et design sans limite','Détourage, sous-titres et silences en local','Export sans filigrane','50 crédits offerts'], btn:'Commencer', href:'Montaj Studio.dc.html#/home', bg:'#F5F5F7', tx:'#1D1D1F', border:'transparent', btnBg:'#1D1D1F', btnTx:'#FFFFFF'},
+      {icon:'coins', c:'#30D158', name:'Crédits', price:'dès 5 €', per:'à l’usage', desc:'Toutes nos IA intégrées, sans abonnement et sans clé à configurer.', feats:['Studio Chat, images, vidéos et pubs UGC','Tu paies uniquement ce que tu génères','Crédits valables 12 mois','Mobile Money, carte ou PayPal'], btn:'Acheter des crédits', href:'Montaj Studio.dc.html#/billing', bg:'#111113', tx:'#F5F5F7', border:'#30D158', btnBg:'#30D158', btnTx:'#111113'},
+      {icon:'key-round', c:'#0A84FF', name:'Pro Clés', price:'4,99 €', per:'/ mois', desc:'Branche tes propres clés API et paie tes fournisseurs directement.', feats:['OpenAI, Anthropic, fal.ai, Higgsfield, ElevenLabs…','API personnalisées compatibles OpenAI ou REST','Aucune marge sur tes générations','Tes crédits restent utilisables'], btn:'Passer à Pro Clés', href:'Montaj Studio.dc.html#/billing', bg:'#F5F5F7', tx:'#1D1D1F', border:'transparent', btnBg:'#0A84FF', btnTx:'#FFFFFF'}];
+    const faq=[
+      ['Est-ce vraiment gratuit ?','Oui. Les éditeurs vidéo et design, l’export sans filigrane et l’IA locale (détourage, sous-titres, suppression des silences) sont gratuits, sans limite de projets. Seules les générations IA dans le cloud consomment des crédits, ou passent par tes propres clés avec Pro Clés.'],
+      ['Comment fonctionnent les crédits ?','Chaque génération a un coût en crédits affiché avant de la lancer : 2 à 4 crédits pour une image, 10 crédits par seconde de vidéo Seedance. Tu achètes des packs à partir de 5 €, valables 12 mois.'],
+      ['Pourquoi un abonnement pour mes propres clés ?','Pro Clés (4,99 € / mois) couvre l’infrastructure qui chiffre tes clés et relaie les appels. Tu paies ensuite tes générations directement chez tes fournisseurs, sans marge de notre part.'],
+      ['Quelles IA puis-je brancher ?','OpenAI, Anthropic, fal.ai, OpenRouter, Higgsfield, ElevenLabs, Runway, Luma, Kling, Google Gemini, xAI, Replicate, Black Forest Labs, Stability AI, HeyGen, Mistral, Groq, et toute API compatible OpenAI ou REST.'],
+      ['Mes fichiers sont-ils envoyés sur un serveur ?','Non par défaut. Tes médias, le rendu et les exports restent dans ton navigateur. Seuls les éléments nécessaires à une génération IA sont transmis au fournisseur choisi.'],
+      ['Puis-je modifier ce que l’IA génère ?','Oui. Tu peux ajuster un résultat directement dans la discussion, ou l’ouvrir dans l’éditeur vidéo ou design pour le retoucher entièrement. C’est facultatif.']]
+      .map((f,i)=>({i, q:f[0], a:f[1], open:s.faq===i, icon:s.faq===i?'minus':'plus', toggle:()=>this.setState({faq:s.faq===i?-1:i})}));
+    return {
+      heroWords:['Décris-le,','monte-le,','publie-le.'].map((w,i)=>({w, plain:i<2, grad:i===2})),
+      navBg:s.scrolled?'rgba(28,28,30,.86)':'#1C1C1E', navShadow:s.scrolled?'0 18px 50px rgba(0,0,0,.3)':'0 12px 40px rgba(0,0,0,.22)', tiltX:s.tilt.toFixed(2)+'deg',
+      typed:(()=>{ const P=['Pub UGC TikTok pour ma crème au karité','Affiche pour ma soirée de lancement, samedi 18 h','3 miniatures YouTube pour ma vidéo de test','Vidéo : lever de soleil sur Dakar, vu du ciel']; let t=s.t; for(let k=0;k<400;k++){ const p=P[k%P.length], L=p.length+28; if(t<L) return p.slice(0,Math.min(p.length,t)); t-=L; } return ''; })(),
+      capWord:['CE PIXEL','TIENT DEUX','JOURS','SANS CHARGE','ÇA CHANGE','TOUT'][Math.floor((s.t%90)/15)],
+      playhead:((s.t%90)/90*100).toFixed(2)+'%',
+      menuOpen:s.menu, toggleMenu:()=>this.setState({menu:!s.menu}), closeMenu:()=>this.setState({menu:false}), chev:s.menu?'chevron-up':'chevron-down', featColor:s.menu?'#FFFFFF':'#AEAEB2', navMax:s.menu?'640px':(s.scrolled?'580px':'620px'),
+      menu,
+      mockThreads:[['Pub UGC — crème karité','#2C2C2E'],['Photos produit Pixel 11','transparent'],['Miniatures YouTube','transparent'],['Affiche lancement','transparent']].map(t=>({label:t[0], bg:t[1]})),
+      mockShots:[['ugc-hook','Accroche'],['ugc-demo','Démo'],['ugc-selfie','Avis'],['ugc-packshot','Offre']].map((x,i)=>{ const on=(s.t%70)>=8+i*7; return {bg:IMG(x[0],180,320), label:x[1], op:on?1:0, tf:on?'none':'translateY(10px) scale(.94)'}; }),
+      mockJobs:(()=>{ const pct=Math.floor((s.t*1.6)%100); return [['ugc-hook','Pub UGC · 25 s','Terminé','#30D158',0],['pixel-stone-a','Image · gpt-image-2','Terminé','#30D158',0],['night-city','Vidéo 5 s · Seedance','En cours · '+pct+' %','#FF9F0A',1],['portrait-awa','Avatar · Higgsfield','En attente d’accord','#0A84FF',0]].map(j=>({bg:IMG(j[0],80,80), label:j[1], st:j[2], c:j[3], bar:!!j[4], pct:pct+'%'})); })(),
+      audiences:(()=>{ const A=[['youtube','YouTubeurs'],['smartphone','TikTokeurs'],['store','Commerçants'],['briefcase','Agences'],['megaphone','Équipes marketing'],['graduation-cap','Enseignants'],['heart-handshake','Associations'],['palette','Graphistes'],['mic','Podcasteurs'],['shopping-bag','E-commerce']]; return A.concat(A).map(a=>({icon:a[0], label:a[1]})); })(),
+      pillars:[['sparkles','Générer','#chat'],['clapperboard','Monter','#video'],['pen-tool','Designer','#design'],['captions','Sous-titrer','#video'],['send','Publier','#tarifs']].map((p,i)=>({icon:p[0], label:p[1], href:p[2], i})),
+      features:feats.map((f,i)=>({...f, textOrder:i%2?2:1, visOrder:i%2?1:2, isChat:f.kind==='chat', isVideo:f.kind==='video', isDesign:f.kind==='design', isKeys:f.kind==='keys'})),
+      chatImgs:['pixel-stone-a','pixel-stone-b','pixel-stone-c','pixel-stone-d'].map((x,i)=>{ const on=(s.t%80)>=10+i*6; return {bg:IMG(x,320,400), op:on?1:0, tf:on?'none':'scale(.9)'}; }),
+      chatActs:[['copy','Variantes'],['expand','Agrandir'],['clapperboard','Animer'],['reply','Répondre']].map(a=>({icon:a[0], label:a[1]})),
+      videoBg:IMG('pixel11-rush',960,540),
+      tracks:[[[3,'#8E3FB8',1],[5,'transparent',0],[2,'#8E3FB8',1]],[[10,'#C98A0A',1]],[[4,'#1F5FBF',1],[3,'#1F5FBF',1],[3,'#1F5FBF',1]],[[10,'#1E8A48',1]]].map(t=>t.map(c=>({f:c[0], c:c[1], o:c[2]}))),
+      designBg:IMG('launch-night-neon',560,700),
+      layers:[['type','Titre','#E6F1FF'],['type','Date','transparent'],['image','Logo TechLab','transparent'],['image','Photo boutique','transparent']].map((l,i)=>({icon:l[0], label:l[1], bg:Math.floor(s.t/18)%4===i?'#E6F1FF':'transparent'})),
+      provs:[['OpenAI','#AEAEB2','bot'],['Anthropic','#FF9F0A','message-square'],['fal.ai','#BF5AF2','zap'],['Higgsfield','#FF375F','clapperboard'],['ElevenLabs','#FFD60A','audio-lines'],['Runway','#64D2FF','film'],['Gemini','#0A84FF','gem'],['Replicate','#30D158','boxes'],['Ton API','#E5E5EA','plus']].map((p,i)=>{ const on=Math.floor(s.t/7)%9===i; return {name:p[0], c:p[1], icon:p[2], tf:on?'translateY(-8px) scale(1.04)':'none', sh:on?'0 22px 50px rgba(48,209,88,.28)':'0 12px 34px rgba(0,0,0,.08)'}; }),
+      plans:plans.map((p,i)=>({...p, i})),
+      packs:[['500','5 €',0],['1 200','10 €',1],['3 000','22 €',0],['8 000','50 €',0]].map(p=>({cr:p[0], price:p[1], border:p[2]?'#0A84FF':'transparent'})),
+      faq,
+    };
+  }
+}
+</script>
+</body>
+</html>

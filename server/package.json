@@ -3,11 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "npm --prefix ../app run build && mkdir -p public && cp ../app/dist/montaj-studio.html public/index.html",
     "build:app": "npm --prefix ../app run build && mkdir -p public && cp ../app/dist/montaj-studio.html public/index.html",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "wrangler dev",
-    "deploy": "npm run build:app && wrangler deploy",
+    "deploy": "npm run build:app && wrangler d1 migrations apply montaj-studio --remote && wrangler deploy",
     "check": "wrangler deploy --dry-run --outdir .wrangler/dry"
   },
   "dependencies": {

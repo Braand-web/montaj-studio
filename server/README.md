@@ -36,7 +36,9 @@ Sur Opus, le repli côté serveur est activé (`fallbacks: "default"`) : si une 
 
 ## Déploiement
 
-Le workflow `.github/workflows/deploy.yml` teste puis déploie à chaque push sur `main`.
+Le site est relié à Cloudflare par l'intégration Git (Workers Builds) : chaque push sur `main` redéploie le Worker `montaj-studio`. Réglages conseillés dans Cloudflare → Workers → montaj-studio → Settings → Build : dossier racine `server`, commande de build `npm ci --prefix ../app && npm ci && npm run build`, commande de déploiement `npx wrangler d1 migrations apply montaj-studio --remote && npx wrangler deploy`. La page construite (`server/public/index.html`) est aussi versionnée, donc un déploiement sans build reste complet. Les secrets (`ANTHROPIC_API_KEY`, Stripe) se règlent dans Settings → Variables and Secrets du Worker.
+
+Le workflow GitHub `.github/workflows/deploy.yml` lance les tests à chaque push ; il ne déploie lui-même que si les secrets ci-dessous sont présents dans GitHub.
 
 Secrets à ajouter au dépôt GitHub (Settings → Secrets and variables → Actions) :
 

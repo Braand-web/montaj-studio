@@ -1,3 +1,4 @@
+import { PROVIDER_LOGOS } from '../ui/providerLogos';
 import { useEffect, useState } from 'react';
 import { KeyRound, CircleCheck, CircleAlert, Sparkles, Image as ImageIcon, Clapperboard, Mic, Wand2, Globe, Lock } from 'lucide-react';
 import { useApp, useT, type AgentMode, type Tier } from '../store/app';
@@ -30,6 +31,15 @@ export const PROVIDERS: { id: string; name: string; c: string; icon: typeof Spar
   { id: 'mistral', name: 'Mistral', c: '#FF9F0A', icon: Wand2, caps: ['Texte, traduction', 'Text, translation'] },
   { id: 'custom', name: 'Personnalisé', c: '#8E8E93', icon: Globe, caps: ['API compatible OpenAI ou REST', 'OpenAI-compatible or REST API'] },
 ];
+
+// Real brand mark on a white tile (readable in both themes); monogram or generic icon when no mark is available.
+export function ProviderLogo({ p, size = 34 }: { p: (typeof PROVIDERS)[number]; size?: number }) {
+  const svg = PROVIDER_LOGOS[p.id];
+  const box = { width: size, height: size, borderRadius: size * 0.28, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' } as const;
+  if (svg) return <span title={p.name} style={{ ...box, background: '#fff', color: '#111113', padding: size * 0.2, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)' }} dangerouslySetInnerHTML={{ __html: svg }} />;
+  if (p.id === 'custom') return <span style={{ ...box, background: 'var(--panel2)' }}><p.icon size={size * 0.45} color="var(--tx2)" /></span>;
+  return <span title={p.name} style={{ ...box, background: '#111113', color: '#fff', fontWeight: 800, fontSize: size * 0.46, letterSpacing: '-.04em' }}>{p.name[0]}</span>;
+}
 
 export function Providers() {
   const T = useT();
@@ -68,7 +78,7 @@ export function Providers() {
             return (
               <button key={x.id} onClick={() => setPick(x.id)} className="col" style={{ alignItems: 'flex-start', gap: 6, padding: 14, minHeight: 112, borderRadius: 18, border: `1px solid ${pick === x.id ? 'var(--accTx)' : 'var(--line)'}`, background: `color-mix(in oklab, ${x.c} 10%, var(--panel))`, textAlign: 'left' }}>
                 <div className="row" style={{ gap: 8, width: '100%' }}>
-                  <span style={{ width: 30, height: 30, borderRadius: 15, background: x.c, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><x.icon size={14} color="#111113" /></span>
+                  <ProviderLogo p={x} size={34} />
                   <span className="grow" style={{ fontSize: 14, fontWeight: 600 }}>{x.id === 'custom' ? T('Personnalisé', 'Custom') : x.name}</span>
                   {on && <CircleCheck size={15} color="#30D158" />}
                 </div>
@@ -108,7 +118,7 @@ export function Providers() {
         </div>
       ) : (
         <div className="card col" style={{ padding: 16, gap: 12 }}>
-          <div className="row" style={{ gap: 10 }}><span style={{ fontSize: 15, fontWeight: 600 }}>{p.id === 'custom' ? T('Fournisseur personnalisé', 'Custom provider') : p.name}</span><span className="pill">{T('Bientôt', 'Soon')}</span></div>
+          <div className="row" style={{ gap: 10 }}><ProviderLogo p={p} size={40} /><span style={{ fontSize: 15, fontWeight: 600 }}>{p.id === 'custom' ? T('Fournisseur personnalisé', 'Custom provider') : p.name}</span><span className="pill">{T('Bientôt', 'Soon')}</span></div>
           <span className="muted pretty" style={{ fontSize: 12 }}>{T(p.caps[0], p.caps[1])}. {T('Tu colleras ici ta clé API ; les générations seront facturées directement par ce fournisseur, sans marge. Le coût estimé sera affiché avant chaque génération.', 'You will paste your API key here; generations will be billed directly by this provider, with no markup. The estimated cost will be shown before every generation.')}</span>
           <div className="row" style={{ gap: 8 }}>
             <input className="input mono grow" disabled placeholder={T('Clé API · disponible avec la passerelle serveur', 'API key · available with the server gateway')} />

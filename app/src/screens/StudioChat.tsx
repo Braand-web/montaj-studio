@@ -283,13 +283,13 @@ export function StudioChat() {
               {!allCards.length && <div className="faint" style={{ padding: 60, textAlign: 'center', border: '1px dashed var(--line2)', borderRadius: 18 }}>{T('Les designs et vidéos créés ici apparaîtront dans cette galerie.', 'Designs and videos created here will show up in this gallery.')}</div>}
             </div>
           ) : !thread || !thread.msgs.length ? (
-            <div className="col" style={{ maxWidth: 860, margin: '0 auto', padding: '8vh 24px 24px', alignItems: 'center', gap: 28, textAlign: 'center' }}>
+            <div className="col" style={{ maxWidth: 680, margin: '0 auto', padding: '8vh 24px 24px', alignItems: 'center', gap: 28, textAlign: 'center' }}>
               <div style={{ width: 64, height: 64, borderRadius: 32, background: 'linear-gradient(135deg,#0A84FF,#BF5AF2 60%,#FF375F)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 18px 50px rgba(10,132,255,.35)' }}><Sparkles size={28} color="#fff" /></div>
               <div className="col" style={{ gap: 10, alignItems: 'center' }}>
                 <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: '-.03em', textWrap: 'balance' }}>{T('Que veux-tu créer aujourd’hui ?', 'What do you want to create today?')}</h1>
                 <p className="muted pretty" style={{ margin: 0, maxWidth: 560, fontSize: 15, lineHeight: 1.5 }}>{T('Décris le résultat : Claude crée le document au bon format, avec ta marque, et tu le reprends dans l’éditeur.', 'Describe the result: Claude creates the document in the right format, with your brand, and you pick it up in the editor.')}</p>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 10, width: '100%', textAlign: 'left' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10, width: '100%', textAlign: 'left' }}>
                 {recipes.map((r) => (
                   <button key={r.label} onClick={() => { setInput(r.prompt); setKind(r.kind); inputRef.current?.focus(); }} className="col" style={{ alignItems: 'flex-start', gap: 4, padding: 16, minHeight: 124, borderRadius: 20, border: 0, background: `color-mix(in oklab, ${r.c} 14%, var(--panel))`, textAlign: 'left' }}>
                     <span style={{ width: 34, height: 34, borderRadius: 17, background: r.c, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'auto' }}><r.icon size={16} color="#111113" /></span>
@@ -300,7 +300,7 @@ export function StudioChat() {
               </div>
             </div>
           ) : (
-            <div className="col" style={{ maxWidth: 860, margin: '0 auto', padding: '28px 24px 16px', gap: 26 }}>
+            <div className="col" style={{ maxWidth: 680, margin: '0 auto', padding: '28px 24px 16px', gap: 26 }}>
               {thread.msgs.map((m) => m.role === 'user'
                 ? <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '74%', padding: '10px 14px', borderRadius: '20px 20px 6px 20px', background: 'var(--acc)', color: '#fff', fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{m.text}</div>
                 : (
@@ -333,7 +333,7 @@ export function StudioChat() {
           )}
         </div>
         <div className="row" style={{ padding: '0 24px 20px', justifyContent: 'center' }}>
-          <div style={{ width: '100%', maxWidth: 860, borderRadius: 26, padding: 1, background: 'linear-gradient(135deg, rgba(10,132,255,.85), rgba(191,90,242,.45) 40%, var(--line2) 75%)', boxShadow: '0 20px 50px rgba(0,0,0,.18)' }}>
+          <div style={{ width: '100%', maxWidth: 680, borderRadius: 26, padding: 1, background: 'linear-gradient(135deg, rgba(10,132,255,.85), rgba(191,90,242,.45) 40%, var(--line2) 75%)', boxShadow: '0 20px 50px rgba(0,0,0,.18)' }}>
             <div className="col" style={{ borderRadius: 25, background: 'var(--panel)', padding: '14px 14px 10px 18px', gap: 10 }}>
               <textarea ref={inputRef} id="chat-input" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} rows={2}
                 placeholder={T('Décris ce que tu veux créer… (Maj+Entrée pour aller à la ligne)', 'Describe what you want to create… (Shift+Enter for a new line)')}

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack, LayoutGrid, Repeat, ImageDown, SkipForward } from 'lucide-react';
+import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack, LayoutGrid, Repeat, ImageDown, SkipForward, Diamond, Snowflake, Pipette, Trash2 } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useVideo, V, newClip, freeTrack, trackEnd, duration, defaultFx, videoSnapshot, fmtDur } from './store';
 import { Engine } from './engine';
+import { transformAt, upsertKf, kfIndexAt, type KfProp } from './keyframes';
 import { Timeline } from './Timeline';
 import { getDoc, createDoc, patchDoc } from '../lib/docs';
 import { importBlob, importFiles, preload } from '../lib/media';
-import type { Clip, ClipFx, FontKey, MediaItem, VideoData } from '../model/types';
+import type { Clip, ClipFx, FontKey, MediaItem, VideoData, BlendMode, ClipMask } from '../model/types';
 import { Composer, useAgentRun } from '../agent/Composer';
 import { videoHost, setVideoMedia } from './host';
 import { useImages } from '../design/LeftPanel';
@@ -238,6 +239,24 @@ function Preview() {
   };
 
   const loop = useVideo((s) => s.loop);
+  const freeze = async () => {
+    if (!engine) return;
+    const at = Math.round(engine.t * 100) / 100;
+    const c = document.createElement('canvas');
+    engine.drawTo(c, at);
+    const blob = await canvasBlob(c, 'image/jpeg', 0.95);
+    const m = await importBlob(blob, `freeze_${tc(at).replace(/[:.]/g, '-')}.jpg`, 'capture', 'image');
+    if (!m) return;
+    const st = useVideo.getState();
+    const under = st.data().clips.find((x) => x.track === 'video' && at > x.start + 0.05 && at < x.start + x.dur - 0.05);
+    if (under) V.split(under.id, at);
+    const len = 2;
+    st.apply((d) => {
+      for (const x of d.clips) if (x.track === 'video' && x.start >= at - 0.01) x.start = Math.round((x.start + len) * 100) / 100;
+      d.clips.push(newClip({ track: 'video', kind: 'image', mediaId: m.id, name: T('Image figée', 'Freeze frame'), start: at, dur: len, fit: 'cover' }));
+    });
+    notify(T('Image figée insérée (2 s). La suite de la piste vidéo a été décalée.', 'Freeze frame inserted (2 s). The rest of the video track was shifted.'));
+  };
   const saveFrame = async () => {
     if (!engine) return;
     const c = document.createElement('canvas');
@@ -288,6 +307,7 @@ function Preview() {
         <span className="mono tnum" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tc(t)} <span className="faint">/ {tc(dur)}</span></span>
         <span className="faint hide-narrow" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>J · K · L</span>
         <div className="grow" />
+        <button className="btn ghost" style={{ height: 28 }} disabled={!view.clips.some((x) => x.track === 'video')} onClick={() => void freeze()} title={T('Insère l’image affichée pendant 2 s à la tête de lecture', 'Inserts the current frame for 2 s at the playhead')}><Snowflake size={13} />{T('Figer', 'Freeze')}</button>
         <button className="btn ghost" style={{ height: 28 }} disabled={!view.clips.length} onClick={() => void saveFrame()} title={T('Enregistre l’image affichée en PNG', 'Saves the current frame as PNG')}><ImageDown size={13} />{T('Image PNG', 'PNG frame')}</button>
         <button className="btn ghost" style={{ height: 28 }} disabled={!view.clips.length} onClick={() => void capture()}><Camera size={13} />{T('Capturer en design', 'Capture as design')}</button>
         <button className={'btn ghost'} style={{ height: 28, borderColor: safe ? 'var(--accTx)' : undefined }} onClick={() => setSafe(!safe)}>{T('Zones de sécurité', 'Safe zones')}</button>
@@ -517,6 +537,9 @@ function Inspector() {
   const c = view.clips.find((x) => x.id === sel);
   const cap = view.captions.find((x) => x.id === selCap);
   const brand = useApp((s) => s.brand);
+  const kfMode = !!c?.kf?.length;
+  // Only follow the playhead when the selected clip is animated (keeps the inspector light during playback).
+  const playT = useVideo((s) => (s.playing && !kfMode ? Math.floor(s.t * 4) / 4 : s.t));
 
   if (locked) return <div className="muted pretty" style={{ padding: 14, fontSize: 12 }}>{T("L'assistant travaille sur le document. Applique ou refuse sa proposition pour reprendre la main.", 'The assistant is working on the document. Apply or refuse its proposal to take back control.')}</div>;
 
@@ -557,6 +580,17 @@ function Inspector() {
   }
 
   const up = (p: Partial<Clip> | ((c: Clip) => void), key?: string) => V.update(c.id, p, key);
+  const local = Math.max(0, Math.min(c.dur, playT - c.start));
+  const tf = transformAt(c, local);
+  const kfHere = kfIndexAt(c, local) >= 0;
+  const setTf = (k: KfProp, v: number) => {
+    if (kfMode) up((x) => upsertKf(x, local, { [k]: v }), 'kf' + c.id + k + Math.round(local * 25));
+    else up({ [k]: v }, k + c.id);
+  };
+  const tfRows: [KfProp, string, number, number, number, string, number][] = [
+    ['scale', T('Échelle', 'Scale'), 0.2, 3, 0.01, '×', 1], ['x', 'X', -100, 100, 1, '%', 1], ['y', 'Y', -100, 100, 1, '%', 1],
+    ['rot', T('Rotation', 'Rotation'), -180, 180, 1, '°', 1], ['opacity', T('Opacité', 'Opacity'), 0, 100, 1, '%', 100],
+  ];
   const fx = { ...defaultFx(), ...c.fx };
   const setFx = (k: keyof ClipFx, v: number) => up((x) => { x.fx = { ...defaultFx(), ...x.fx, [k]: v }; }, 'fx' + c.id + k);
   const visual = c.kind === 'video' || c.kind === 'image';
@@ -591,13 +625,36 @@ function Inspector() {
       )}
       {visual && (
         <>
-          <Section title={T('Cadrage', 'Framing')}>
+          <Section title={T('Cadrage et animation', 'Framing and motion')}>
             <Chips small value={c.fit ?? 'cover'} onChange={(v) => up({ fit: v })} options={[{ id: 'cover' as const, label: T('Remplir', 'Fill') }, { id: 'contain' as const, label: T('Contenir', 'Fit') }]} />
-            <Slider id="c-scale" label={T('Échelle', 'Scale')} value={c.scale ?? 1} min={0.2} max={3} step={0.01} suffix="×" onChange={(v) => up({ scale: v }, 'sc' + c.id)} />
-            <Slider id="c-x" label="X" value={c.x ?? 0} min={-100} max={100} suffix="%" onChange={(v) => up({ x: v }, 'x' + c.id)} />
-            <Slider id="c-y" label="Y" value={c.y ?? 0} min={-100} max={100} suffix="%" onChange={(v) => up({ y: v }, 'y' + c.id)} />
-            <Slider id="c-rot" label={T('Rotation', 'Rotation')} value={c.rot ?? 0} min={-180} max={180} suffix="°" onChange={(v) => up({ rot: v }, 'r' + c.id)} />
-            <Slider id="c-op" label={T('Opacité', 'Opacity')} value={Math.round((c.opacity ?? 1) * 100)} min={0} max={100} suffix="%" onChange={(v) => up({ opacity: v / 100 }, 'o' + c.id)} />
+            {(c.fit ?? 'cover') === 'contain' && <div className="row"><Switch on={!!c.bgBlur} onChange={(v) => up({ bgBlur: v })} /><span style={{ fontSize: 12 }}>{T('Arrière-plan flou', 'Blurred background')}</span></div>}
+            <KeyframeBar c={c} local={local} />
+            {tfRows.map(([k, l, min, max, step, suf, mul]) => (
+              <Slider key={k} id={'c-' + k} label={l + (kfMode && kfHere ? ' ◆' : '')} value={Math.round(tf[k] * mul * 100) / 100} min={min} max={max} step={step} suffix={suf}
+                onChange={(v) => setTf(k, v / mul)} />
+            ))}
+            {kfMode && <span className="faint pretty" style={{ fontSize: 11 }}>{T('Images clés actives : modifier une valeur crée ou met à jour une image clé à la tête de lecture.', 'Keyframes on: changing a value adds or updates a keyframe at the playhead.')}</span>}
+          </Section>
+          <Section title={T('Masque et fusion', 'Mask and blend')}>
+            <Chips small value={c.mask ?? 'none'} onChange={(v) => up({ mask: v })} options={MASKS.map((m) => ({ id: m.k, label: T(m.fr, m.en) }))} />
+            <label className="field"><span>{T('Mode de fusion', 'Blend mode')}</span>
+              <select className="input" value={c.blend ?? 'normal'} onChange={(e) => up({ blend: e.target.value as BlendMode })} style={{ height: 28 }}>
+                {BLENDS.map((b) => <option key={b.k} value={b.k}>{T(b.fr, b.en)}</option>)}
+              </select>
+            </label>
+          </Section>
+          <Section title={T('Incrustation (fond vert)', 'Chroma key (green screen)')}>
+            <div className="row"><Switch on={!!c.chroma} onChange={(v) => up({ chroma: v ? { color: '#00FF00', tol: 35 } : undefined })} /><span style={{ fontSize: 12 }}>{T('Retirer une couleur de fond', 'Remove a background color')}</span></div>
+            {c.chroma && (
+              <>
+                <div className="row wrap" style={{ gap: 6 }}>
+                  {['#00FF00', '#00B140', '#0047BB', '#FFFFFF', '#000000'].map((h) => <button key={h} title={h} onClick={() => up({ chroma: { ...c.chroma!, color: h } })} style={{ width: 26, height: 26, borderRadius: 8, border: c.chroma!.color.toUpperCase() === h ? '2px solid var(--acc)' : '1px solid var(--line2)', background: h }} />)}
+                  {'EyeDropper' in window && <button className="btn icon" title={T('Pipette : clique la couleur à retirer dans l’aperçu', 'Eyedropper: click the color to remove in the preview')} onClick={async () => { try { const r = await new (window as unknown as { EyeDropper: new () => { open(): Promise<{ sRGBHex: string }> } }).EyeDropper().open(); up({ chroma: { ...c.chroma!, color: r.sRGBHex.toUpperCase() } }); } catch { /* cancelled */ } }}><Pipette size={13} /></button>}
+                </div>
+                <Slider id="ck-tol" label={T('Tolérance', 'Tolerance')} value={c.chroma.tol} min={0} max={100} onChange={(v) => up({ chroma: { ...c.chroma!, tol: v } }, 'ck' + c.id)} />
+                <span className="faint pretty" style={{ fontSize: 11 }}>{T('Place ce clip sur la piste Superposition, au-dessus de ton fond.', 'Put this clip on the Overlay track, above your background.')}</span>
+              </>
+            )}
           </Section>
           <Section title={T('Couleur', 'Color')}>
             <Slider id="fx-bri" label={T('Luminosité', 'Brightness')} value={fx.bri} min={-100} max={100} onChange={(v) => setFx('bri', v)} />
@@ -635,6 +692,37 @@ function Inspector() {
           <Slider id="a-fo" label={T('Fondu sortie', 'Fade out')} value={c.fadeOut ?? 0} min={0} max={5} step={0.1} suffix=" s" onChange={(v) => up({ fadeOut: v }, 'fo' + c.id)} />
         </Section>
       )}
+    </div>
+  );
+}
+
+const MASKS: { k: ClipMask; fr: string; en: string }[] = [
+  { k: 'none', fr: 'Aucun', en: 'None' }, { k: 'circle', fr: 'Cercle', en: 'Circle' }, { k: 'rounded', fr: 'Arrondi', en: 'Rounded' },
+  { k: 'heart', fr: 'Cœur', en: 'Heart' }, { k: 'star', fr: 'Étoile', en: 'Star' }, { k: 'diamond', fr: 'Losange', en: 'Diamond' },
+];
+const BLENDS: { k: BlendMode; fr: string; en: string }[] = [
+  { k: 'normal', fr: 'Normal', en: 'Normal' }, { k: 'screen', fr: 'Superposition claire (écran)', en: 'Screen' }, { k: 'multiply', fr: 'Produit', en: 'Multiply' },
+  { k: 'overlay', fr: 'Incrustation', en: 'Overlay' }, { k: 'lighten', fr: 'Éclaircir', en: 'Lighten' }, { k: 'darken', fr: 'Assombrir', en: 'Darken' }, { k: 'difference', fr: 'Différence', en: 'Difference' },
+];
+
+function KeyframeBar({ c, local }: { c: Clip; local: number }) {
+  const T = useT();
+  const i = kfIndexAt(c, local);
+  const kf = c.kf ?? [];
+  const jump = (dir: 1 | -1) => {
+    const ts = kf.map((f) => f.t).filter((t) => (dir > 0 ? t > local + 0.04 : t < local - 0.04));
+    if (!ts.length) return;
+    seekTo(c.start + (dir > 0 ? Math.min(...ts) : Math.max(...ts)));
+  };
+  return (
+    <div className="row" style={{ gap: 6, padding: '6px 8px', borderRadius: 10, background: 'var(--panel2)' }}>
+      <Diamond size={13} color={kf.length ? '#FFD23F' : 'var(--tx3)'} fill={i >= 0 ? '#FFD23F' : 'none'} />
+      <span className="grow" style={{ fontSize: 12 }}>{kf.length ? `${kf.length} ${T('image(s) clé(s)', 'keyframe(s)')}` : T('Images clés', 'Keyframes')}</span>
+      <button className="btn bare icon" style={{ width: 24, height: 24 }} disabled={!kf.length} onClick={() => jump(-1)} title={T('Image clé précédente', 'Previous keyframe')}>‹</button>
+      {i >= 0
+        ? <button className="btn sm" onClick={() => V.update(c.id, (x) => { x.kf = (x.kf ?? []).filter((_, j) => j !== i); if (!x.kf.length) delete x.kf; })}><Trash2 size={11} />{T('Retirer', 'Remove')}</button>
+        : <button className="btn sm primary" onClick={() => V.update(c.id, (x) => upsertKf(x, local))} title={T('Ajoute une image clé à la tête de lecture', 'Adds a keyframe at the playhead')}><Diamond size={11} />{T('Ajouter', 'Add')}</button>}
+      <button className="btn bare icon" style={{ width: 24, height: 24 }} disabled={!kf.length} onClick={() => jump(1)} title={T('Image clé suivante', 'Next keyframe')}>›</button>
     </div>
   );
 }

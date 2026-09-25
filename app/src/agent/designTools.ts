@@ -19,7 +19,7 @@ const SHAPE_KINDS: ShapeKind[] = ['triangle', 'diamond', 'hexagon', 'star', 'arr
 
 export function compactDesign(d: DesignData) {
   return d.pages.map((p, i) => ({
-    page: i + 1, w: p.w, h: p.h, bg: p.bg,
+    page: i + 1, w: p.w, h: p.h, bg: p.bg, ...(p.bgGrad ? { bgGrad: p.bgGrad } : {}),
     els: p.els.map((e) => {
       const o: Record<string, unknown> = { id: e.id, type: e.type, name: e.name, x: Math.round(e.x), y: Math.round(e.y), w: Math.round(e.w), h: Math.round(e.h) };
       if (e.type === 'text') Object.assign(o, { text: e.text, size: Math.round(e.size ?? 48), weight: e.weight, color: e.color, font: e.font ?? 'sans', align: e.align ?? 'left' });
@@ -30,6 +30,11 @@ export function compactDesign(d: DesignData) {
       if (e.italic) o.italic = true;
       if (e.ls !== undefined) o.ls = e.ls;
       if (e.adj) o.adj = e.adj;
+      if (e.grad) o.grad = e.grad;
+      if (e.shadow) o.dropShadow = e.shadow;
+      if (e.mask) o.mask = e.mask;
+      if (e.crop) o.crop = e.crop;
+      if (e.fx?.glow) o.neon = true;
       if (e.type === 'image') o.media = e.mediaId ? 'set' : 'empty';
       if (e.type === 'chart') o.data = e.data;
       if (e.type === 'table') o.rows = e.rows;
@@ -78,6 +83,13 @@ function applyProps(el: El, a: Record<string, unknown>) {
   if (a.kind !== undefined) { const v = str(a.kind); if (v === 'col' || v === 'bar') el.kind = v; }
   if (a.mediaId !== undefined) el.mediaId = str(a.mediaId);
   if (a.shape !== undefined) { const v = str(a.shape) as ShapeKind; if (!SHAPE_KINDS.includes(v)) throw new Error('shape must be one of ' + SHAPE_KINDS.join(', ')); el.shape = v; }
+  if (a.grad === null) delete el.grad;
+  else if (a.grad && typeof a.grad === 'object') { const g = a.grad as Record<string, unknown>; const ga = normHex(str(g.a) ?? ''), gb = normHex(str(g.b) ?? ''); if (!ga || !gb) throw new Error('grad.a and grad.b must be hex colors'); el.grad = { a: ga, b: gb, ang: num(g.ang) ?? 135 }; }
+  if (a.dropShadow === null) delete el.shadow;
+  else if (a.dropShadow && typeof a.dropShadow === 'object') { const g = a.dropShadow as Record<string, unknown>; el.shadow = { blur: Math.max(0, num(g.blur) ?? 30), y: num(g.y) ?? 12, op: Math.max(0, Math.min(100, num(g.op) ?? 35)), color: normHex(str(g.color) ?? '') ?? '#000000' }; }
+  if (a.mask !== undefined) { const v = str(a.mask); if (v === 'none') delete el.mask; else if (v && ['circle', 'triangle', 'diamond', 'hexagon', 'star', 'heart', 'burst'].includes(v)) el.mask = v as El['mask']; }
+  if (a.crop && typeof a.crop === 'object') { const g = a.crop as Record<string, unknown>; el.crop = { z: Math.max(1, Math.min(4, num(g.z) ?? 1)), x: Math.max(-100, Math.min(100, num(g.x) ?? 0)), y: Math.max(-100, Math.min(100, num(g.y) ?? 0)) }; }
+  if (a.neon !== undefined) el.fx = { ...el.fx, glow: bool(a.neon) };
   if (a.flipX !== undefined) el.flipX = bool(a.flipX);
   if (a.flipY !== undefined) el.flipY = bool(a.flipY);
   if (a.italic !== undefined) el.italic = bool(a.italic);
@@ -105,6 +117,11 @@ const PROPS = {
   flipX: { type: 'boolean' }, flipY: { type: 'boolean' }, italic: { type: 'boolean' },
   ls: { type: 'number', description: 'letter spacing in thousandths of an em (-100..400)' },
   adj: { type: 'object', description: 'image adjustments {bri, con, sat, hue: -100..100, gray, blur: 0..100}' },
+  grad: { type: 'object', description: 'gradient fill for rect/circle/shape {a: hex, b: hex, ang: CSS degrees}, or null to remove' },
+  dropShadow: { type: 'object', description: 'drop shadow {blur, y (page px), op 0..100, color hex}, or null' },
+  mask: { type: 'string', enum: ['none', 'circle', 'triangle', 'diamond', 'hexagon', 'star', 'heart', 'burst'], description: 'image frame shape' },
+  crop: { type: 'object', description: 'image crop {z: 1..4 zoom, x, y: -100..100 focus}' },
+  neon: { type: 'boolean', description: 'glowing text' },
 };
 
 export function designTools(t: DataTarget<DesignData>, ctx: { brand: BrandKit; media: () => MediaItem[] }): AgentTool[] {
@@ -199,12 +216,14 @@ export function designTools(t: DataTarget<DesignData>, ctx: { brand: BrandKit; m
     },
     {
       name: 'set_page', write: true,
-      description: 'Sets a page background color (hex) and/or its animated-export duration in seconds.',
-      schema: { page: { type: 'number' }, bg: { type: 'string' }, dur: { type: 'number' } }, required: ['page'],
+      description: 'Sets a page background color (hex), a background gradient {a, b, ang} (null to remove) and/or its animated-export duration in seconds.',
+      schema: { page: { type: 'number' }, bg: { type: 'string' }, bgGrad: { type: 'object' }, dur: { type: 'number' } }, required: ['page'],
       run: (a) => {
         t.write((d) => {
           const p = pageAt(d, a.page);
-          if (a.bg !== undefined) { const h = normHex(str(a.bg) ?? ''); if (!h) throw new Error('bg must be hex'); p.bg = h; }
+          if (a.bg !== undefined) { const h = normHex(str(a.bg) ?? ''); if (!h) throw new Error('bg must be hex'); p.bg = h; delete p.bgGrad; }
+          if (a.bgGrad === null) delete p.bgGrad;
+          else if (a.bgGrad && typeof a.bgGrad === 'object') { const g = a.bgGrad as Record<string, unknown>; const ga = normHex(str(g.a) ?? ''), gb = normHex(str(g.b) ?? ''); if (!ga || !gb) throw new Error('bgGrad.a and bgGrad.b must be hex'); p.bgGrad = { a: ga, b: gb, ang: num(g.ang) ?? 135 }; }
           const dur = num(a.dur);
           if (dur !== undefined) p.dur = Math.max(1, Math.min(60, dur));
           t.changes.push(`Page ${a.page} : fond ${p.bg}`);

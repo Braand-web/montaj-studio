@@ -4,7 +4,7 @@ import { fontCss } from '../model/fonts';
 import { prims } from './prims';
 import { mediaUrlSync } from '../lib/media';
 import { bgBoxColor, outlineColor, textInk, ANIM_DUR } from './render';
-import { adjFilter, lsEm, shapePath } from './shapes';
+import { adjFilter, lsEm, shapePath, cssGrad, maskCss, shadowRgba } from './shapes';
 
 // DOM view of one element. Coordinates are percentages of the page and type sizes are in
 // container units, so the same markup renders the canvas, thumbnails and presentation mode.
@@ -31,17 +31,18 @@ export function ElementView({ el, page, animate, outline, onPointerDown, dim }: 
     cursor: onPointerDown ? (el.locked ? 'default' : 'move') : undefined,
     userSelect: 'none',
     touchAction: 'none',
+    filter: el.shadow ? `drop-shadow(0 ${cq(el.shadow.y, pw)} ${cq(el.shadow.blur, pw)} ${shadowRgba(el.shadow)})` : undefined,
     animation: animate && el.anim && el.anim !== 'none' ? `ms-a-${el.anim} ${ANIM_DUR}s cubic-bezier(.2,.8,.2,1) ${el.delay ?? 0}s both` : undefined,
   };
   let inner: React.ReactNode = null;
   switch (el.type) {
     case 'rect':
-      base.background = el.fill ?? '#FFD23F';
+      base.background = el.grad ? cssGrad(el.grad) : el.fill ?? '#FFD23F';
       base.borderRadius = cq(el.radius ?? 0, pw);
       if (el.stroke && el.strokeW) base.boxShadow = `inset 0 0 0 ${cq(el.strokeW, pw)} ${el.stroke}`;
       break;
     case 'circle':
-      base.background = el.fill ?? '#FFD23F';
+      base.background = el.grad ? cssGrad(el.grad) : el.fill ?? '#FFD23F';
       base.borderRadius = '50%';
       break;
     case 'line':
@@ -51,8 +52,10 @@ export function ElementView({ el, page, animate, outline, onPointerDown, dim }: 
       const url = mediaUrlSync(el.mediaId);
       base.borderRadius = cq(el.radius ?? 0, pw);
       base.overflow = 'hidden';
+      { const mk = maskCss(el.mask); if (mk) Object.assign(base, { maskImage: mk, WebkitMaskImage: mk, maskSize: '100% 100%', WebkitMaskSize: '100% 100%', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' }); }
       if (url) {
-        inner = <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: el.fit ?? 'cover', display: 'block', pointerEvents: 'none', filter: adjFilter(el.adj, (px) => cq(px, pw)) }} />;
+        const px = 50 + (el.crop?.x ?? 0) / 2, py = 50 + (el.crop?.y ?? 0) / 2;
+        inner = <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: el.fit ?? 'cover', objectPosition: `${px}% ${py}%`, transform: el.crop && el.crop.z > 1 ? `scale(${el.crop.z})` : undefined, transformOrigin: `${px}% ${py}%`, display: 'block', pointerEvents: 'none', filter: adjFilter(el.adj, (p) => cq(p, pw)) }} />;
       } else {
         base.background = 'repeating-linear-gradient(135deg, rgba(140,140,140,.35) 0 10px, rgba(140,140,140,.16) 10px 20px), #2A2D31';
         inner = <span style={{ position: 'absolute', left: 6, bottom: 6, fontFamily: 'var(--mono)', fontSize: 10, color: '#C9CCD1', background: 'rgba(0,0,0,.45)', padding: '2px 6px', borderRadius: 6, whiteSpace: 'nowrap', maxWidth: 'calc(100% - 12px)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{el.name} · photo</span>;
@@ -74,7 +77,7 @@ export function ElementView({ el, page, animate, outline, onPointerDown, dim }: 
         whiteSpace: 'pre-wrap',
         overflowWrap: 'break-word',
         textTransform: el.upper ? 'uppercase' : undefined,
-        textShadow: el.fx?.shadow ? '0 .04em .16em rgba(0,0,0,.45)' : undefined,
+        textShadow: [el.fx?.shadow ? '0 .04em .16em rgba(0,0,0,.45)' : '', el.fx?.glow ? `0 0 .08em ${ink}, 0 0 .3em ${ink}, 0 0 .6em ${ink}` : ''].filter(Boolean).join(', ') || undefined,
         WebkitTextStroke: el.fx?.outline ? `.12em ${outlineColor(ink)}` : undefined,
         paintOrder: el.fx?.outline ? 'stroke fill' : undefined,
         background: el.fx?.bg ? bgBoxColor(ink) : undefined,
@@ -87,7 +90,8 @@ export function ElementView({ el, page, animate, outline, onPointerDown, dim }: 
     case 'shape':
       inner = (
         <svg viewBox={`0 0 ${el.w} ${el.h}`} width="100%" height="100%" preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible', pointerEvents: 'none' }}>
-          <path d={shapePath(el.shape ?? 'star', el.w, el.h)} fill={el.fill ?? '#FFD23F'} stroke={el.stroke && el.strokeW ? el.stroke : undefined} strokeWidth={el.strokeW || undefined} strokeLinejoin="round" />
+          {el.grad && <defs><linearGradient id={'g' + el.id} gradientUnits="objectBoundingBox" gradientTransform={`rotate(${el.grad.ang - 90} .5 .5)`}><stop offset="0" stopColor={el.grad.a} /><stop offset="1" stopColor={el.grad.b} /></linearGradient></defs>}
+          <path d={shapePath(el.shape ?? 'star', el.w, el.h)} fill={el.grad ? `url(#g${el.id})` : el.fill ?? '#FFD23F'} stroke={el.stroke && el.strokeW ? el.stroke : undefined} strokeWidth={el.strokeW || undefined} strokeLinejoin="round" />
         </svg>
       );
       break;
@@ -126,7 +130,7 @@ export function PageView({ page, animate, style, children, onPointerDown }: {
   return (
     <div
       onPointerDown={onPointerDown}
-      style={{ position: 'relative', aspectRatio: `${page.w}/${page.h}`, background: page.bg, containerType: 'inline-size', overflow: 'hidden', maxWidth: '100%', ...style }}
+      style={{ position: 'relative', aspectRatio: `${page.w}/${page.h}`, background: page.bgGrad ? cssGrad(page.bgGrad) : page.bg, containerType: 'inline-size', overflow: 'hidden', maxWidth: '100%', ...style }}
     >
       {page.els.map((el) => <ElementView key={el.id} el={el} page={page} animate={animate} />)}
       {children}

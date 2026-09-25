@@ -246,6 +246,7 @@ function ClipBox({ c, pps, sel, changed, locked, onDown, onMenu }: { c: Clip; pp
       <span style={{ position: 'relative', textShadow: '0 1px 2px rgba(0,0,0,.6)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {c.muted ? '🔇 ' : ''}{c.trIn ? '◧ ' : ''}{c.kind === 'text' ? '“' + (c.text ?? '') + '”' : c.name}{fxOn ? ' · fx' : ''}{c.speed && c.speed !== 1 ? ` · ${c.speed}×` : ''}
       </span>
+      {c.kf?.map((k, i) => <span key={i} aria-hidden style={{ position: 'absolute', left: k.t * pps - 4, bottom: 3, width: 8, height: 8, background: '#FFD23F', transform: 'rotate(45deg)', borderRadius: 1, boxShadow: '0 0 0 1px rgba(0,0,0,.4)', pointerEvents: 'none' }} />)}
       {!locked && <>
         <span className="trim" onPointerDown={(e) => onDown(e, 'trimL')} style={{ left: 0 }} />
         <span className="trim" onPointerDown={(e) => onDown(e, 'trimR')} style={{ right: 0 }} />

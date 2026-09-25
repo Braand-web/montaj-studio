@@ -3,7 +3,7 @@ import { fontCss } from '../model/fonts';
 import { prims } from './prims';
 import { loadImage, mediaUrl } from '../lib/media';
 import { clamp, lum } from '../lib/util';
-import { adjFilter, lsEm, shapePath } from './shapes';
+import { adjFilter, lsEm, shapePath, canvasGrad, maskPath, shadowRgba, cropBox } from './shapes';
 
 // Canvas renderer for exports and thumbnails (SPEC §3.8): same layout rules as the DOM view.
 
@@ -80,15 +80,23 @@ export async function drawEl(ctx: CanvasRenderingContext2D, el: El, t?: number) 
   if (el.flipX || el.flipY) ctx.scale(el.flipX ? -1 : 1, el.flipY ? -1 : 1);
   ctx.translate(-el.w / 2, -el.h / 2);
   const { w, h } = el;
+  if (el.shadow) {
+    // Canvas shadows ignore the transform: convert page pixels to device pixels.
+    const m = ctx.getTransform(), k = Math.hypot(m.a, m.b) || 1;
+    ctx.shadowColor = shadowRgba(el.shadow);
+    ctx.shadowBlur = el.shadow.blur * k;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = el.shadow.y * k;
+  }
   switch (el.type) {
     case 'rect':
-      ctx.fillStyle = el.fill ?? '#FFD23F';
+      ctx.fillStyle = el.grad ? canvasGrad(ctx, el.grad, w, h) : el.fill ?? '#FFD23F';
       roundRect(ctx, 0, 0, w, h, el.radius ?? 0);
       ctx.fill();
       if (el.stroke && el.strokeW) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.strokeW; ctx.stroke(); }
       break;
     case 'circle':
-      ctx.fillStyle = el.fill ?? '#FFD23F';
+      ctx.fillStyle = el.grad ? canvasGrad(ctx, el.grad, w, h) : el.fill ?? '#FFD23F';
       ctx.beginPath();
       ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -100,16 +108,22 @@ export async function drawEl(ctx: CanvasRenderingContext2D, el: El, t?: number) 
     case 'image': {
       const im = el.mediaId ? await img(el.mediaId) : null;
       ctx.save();
+      const mp = el.mask ? maskPath(el.mask, w, h) : null;
+      if (el.shadow) {
+        // Draw the shadow from the frame outline, then the clipped image on top.
+        ctx.fillStyle = '#000';
+        if (mp) ctx.fill(new Path2D(mp)); else { roundRect(ctx, 0, 0, w, h, el.radius ?? 0); ctx.fill(); }
+        ctx.shadowColor = 'transparent';
+      }
+      if (mp) ctx.clip(new Path2D(mp));
       roundRect(ctx, 0, 0, w, h, el.radius ?? 0);
       ctx.clip();
       if (im) {
-        const fit = el.fit ?? 'cover';
-        const s = fit === 'cover' ? Math.max(w / im.naturalWidth, h / im.naturalHeight) : Math.min(w / im.naturalWidth, h / im.naturalHeight);
-        const dw = im.naturalWidth * s, dh = im.naturalHeight * s;
-        const k = ctx.getTransform().a || 1;
+        const b = cropBox(w, h, im.naturalWidth, im.naturalHeight, el.fit ?? 'cover', el.crop);
+        const k = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
         const filt = adjFilter(el.adj, (px) => `${Math.abs(px * k)}px`);
         if (filt) ctx.filter = filt;
-        ctx.drawImage(im, (w - dw) / 2, (h - dh) / 2, dw, dh);
+        ctx.drawImage(im, b.x, b.y, b.w, b.h);
         ctx.filter = 'none';
       } else {
         ctx.fillStyle = '#2A2D31';
@@ -136,6 +150,14 @@ export async function drawEl(ctx: CanvasRenderingContext2D, el: El, t?: number) 
       ctx.textAlign = align;
       const x = align === 'left' ? 0 : align === 'center' ? w / 2 : w;
       if (el.fx?.shadow) { ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = size * 0.16; ctx.shadowOffsetY = size * 0.04; }
+      if (el.fx?.glow) {
+        // Neon: stacked blurred passes in the text color, then the crisp text on top.
+        const k = Math.hypot(ctx.getTransform().a, ctx.getTransform().b) || 1;
+        ctx.save();
+        ctx.shadowColor = ink; ctx.shadowOffsetY = 0;
+        for (const r of [0.6, 0.3, 0.08]) { ctx.shadowBlur = size * r * k; ctx.fillStyle = ink; lines.forEach((ln, i) => ctx.fillText(ln, x, lh * (i + 0.5))); }
+        ctx.restore();
+      }
       lines.forEach((ln, i) => {
         const y = lh * (i + 0.5);
         if (el.fx?.outline) {
@@ -151,7 +173,7 @@ export async function drawEl(ctx: CanvasRenderingContext2D, el: El, t?: number) 
     }
     case 'shape': {
       const path = new Path2D(shapePath(el.shape ?? 'star', w, h));
-      ctx.fillStyle = el.fill ?? '#FFD23F';
+      ctx.fillStyle = el.grad ? canvasGrad(ctx, el.grad, w, h) : el.fill ?? '#FFD23F';
       ctx.fill(path);
       if (el.stroke && el.strokeW) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.strokeW; ctx.lineJoin = 'round'; ctx.stroke(path); }
       break;
@@ -187,7 +209,7 @@ export async function renderPage(page: Page, width: number, opts: { t?: number; 
   ctx.clearRect(0, 0, c.width, c.height);
   ctx.scale(s, s);
   if (!opts.transparent) {
-    ctx.fillStyle = page.bg;
+    ctx.fillStyle = page.bgGrad ? canvasGrad(ctx, page.bgGrad, page.w, page.h) : page.bg;
     ctx.fillRect(0, 0, page.w, page.h);
   }
   for (const el of page.els) await drawEl(ctx, el, opts.t);

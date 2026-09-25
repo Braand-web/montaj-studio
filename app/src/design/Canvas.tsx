@@ -6,7 +6,7 @@ import { fontCss } from '../model/fonts';
 import { addImageFromMedia, setImageMedia } from './actions';
 import { importFiles } from '../lib/media';
 import { useApp, tNow } from '../store/app';
-import { lsEm } from './shapes';
+import { lsEm, cssGrad } from './shapes';
 
 type Drag =
   | { kind: 'move'; start: { x: number; y: number }; orig: Map<string, { x: number; y: number }>; moved: boolean }
@@ -234,7 +234,7 @@ export function Canvas({ page, readOnly, changed, commentMode, onCanvasClick, ch
       onDrop={onDrop}
       style={{
         position: 'relative', width: `calc(min(100cqw, 100cqh * ${page.w / page.h}) * ${zoom})`, aspectRatio: `${page.w}/${page.h}`, margin: 'auto', flex: 'none',
-        background: page.bg, containerType: 'inline-size', boxShadow: '0 0 0 1px var(--line2), 0 12px 40px rgba(0,0,0,.25)',
+        background: page.bgGrad ? cssGrad(page.bgGrad) : page.bg, containerType: 'inline-size', boxShadow: '0 0 0 1px var(--line2), 0 12px 40px rgba(0,0,0,.25)',
         cursor: commentMode ? 'crosshair' : undefined,
         outline: dropHint ? '2px dashed var(--acc)' : undefined, outlineOffset: 4,
       }}

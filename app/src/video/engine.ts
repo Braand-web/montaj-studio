@@ -4,6 +4,8 @@ import { fontCss } from '../model/fonts';
 import { wrapText } from '../design/render';
 import { duration } from './store';
 import { clamp } from '../lib/util';
+import { transformAt } from './keyframes';
+import { shapePath } from '../design/shapes';
 
 // Browser compositor (SPEC §3.8): decodes the user's media with <video>/<audio> elements,
 // composites every frame on a 2D canvas, and plays audio through Web Audio so the same
@@ -195,9 +197,10 @@ export class Engine {
     }
     if (!sw || !sh) return;
     const local = t - c.start;
-    let alpha = c.opacity ?? 1;
-    let scale = c.scale ?? 1;
-    let dx = ((c.x ?? 0) / 100) * W, dy = ((c.y ?? 0) / 100) * H;
+    const tf = transformAt(c, local);
+    let alpha = tf.opacity;
+    let scale = tf.scale;
+    let dx = (tf.x / 100) * W, dy = (tf.y / 100) * H;
     let blur = 0;
     let dip = 0;
     if (c.trIn && local < c.trIn.dur) {
@@ -216,12 +219,30 @@ export class Engine {
     const fit = c.fit ?? (c.track === 'broll' && c.kind === 'image' ? 'contain' : 'cover');
     const s = (fit === 'cover' ? Math.max(W / sw, H / sh) : Math.min(W / sw, H / sh)) * scale;
     const dw = sw * s, dh = sh * s;
+    if (c.bgBlur && fit === 'contain') {
+      // Blurred, darkened copy filling the frame behind the clip (vertical video from landscape footage).
+      const cs = Math.max(W / sw, H / sh) * 1.08;
+      ctx.save();
+      ctx.globalAlpha = clamp(alpha, 0, 1);
+      ctx.filter = `blur(${Math.round(Math.min(W, H) / 28)}px) brightness(.75)`;
+      ctx.drawImage(src, (W - sw * cs) / 2, (H - sh * cs) / 2, sw * cs, sh * cs);
+      ctx.restore();
+    }
+    if (c.chroma) { const k = this.keyed(src, sw, sh, c.chroma); if (k) { src = k; } }
     ctx.save();
     ctx.globalAlpha = clamp(alpha, 0, 1);
     ctx.translate(W / 2 + dx, H / 2 + dy);
-    if (c.rot) ctx.rotate((c.rot * Math.PI) / 180);
+    if (tf.rot) ctx.rotate((tf.rot * Math.PI) / 180);
+    if (c.mask && c.mask !== 'none') {
+      const m = Math.min(dw, dh);
+      if (c.mask === 'circle') { ctx.beginPath(); ctx.ellipse(0, 0, m / 2, m / 2, 0, 0, Math.PI * 2); ctx.clip(); }
+      else if (c.mask === 'rounded') { roundRect(ctx, -dw / 2, -dh / 2, dw, dh, m * 0.12); ctx.clip(); }
+      else { const p = new Path2D(); p.addPath(new Path2D(shapePath(c.mask, m, m)), new DOMMatrix().translate(-m / 2, -m / 2)); ctx.clip(p); }
+    }
+    if (c.blend && c.blend !== 'normal') ctx.globalCompositeOperation = c.blend;
     ctx.filter = fxFilter(c, blur);
     ctx.drawImage(src, -dw / 2, -dh / 2, dw, dh);
+    ctx.globalCompositeOperation = 'source-over';
     ctx.filter = 'none';
     const fx = c.fx;
     if (fx?.glow) {
@@ -248,6 +269,36 @@ export class Engine {
       ctx.fillRect(0, 0, W, H);
     }
     if (dip > 0) { ctx.fillStyle = `rgba(0,0,0,${dip})`; ctx.fillRect(0, 0, W, H); }
+  }
+
+  private keyCanvas: HTMLCanvasElement | null = null;
+  // Green screen: removes pixels close to the key color (soft edge), at up to 960 px wide.
+  private keyed(src: CanvasImageSource, sw: number, sh: number, ck: { color: string; tol: number }): HTMLCanvasElement | null {
+    try {
+      const k = Math.min(1, 960 / sw);
+      const w = Math.max(1, Math.round(sw * k)), h = Math.max(1, Math.round(sh * k));
+      const cv = this.keyCanvas ?? (this.keyCanvas = document.createElement('canvas'));
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      const x = cv.getContext('2d', { willReadFrequently: true })!;
+      x.clearRect(0, 0, w, h);
+      x.drawImage(src, 0, 0, w, h);
+      const img = x.getImageData(0, 0, w, h), d = img.data;
+      const hex = ck.color.replace('#', '');
+      const kr = parseInt(hex.slice(0, 2), 16), kg = parseInt(hex.slice(2, 4), 16), kb = parseInt(hex.slice(4, 6), 16);
+      const t0 = 30 + ck.tol * 1.6, t1 = t0 + 40;
+      for (let i = 0; i < d.length; i += 4) {
+        const dist = Math.hypot(d[i] - kr, d[i + 1] - kg, d[i + 2] - kb);
+        if (dist < t0) d[i + 3] = 0;
+        else if (dist < t1) {
+          d[i + 3] = Math.round(d[i + 3] * ((dist - t0) / (t1 - t0)));
+          // Spill suppression: pull the dominant key channel down on the edge.
+          if (kg >= kr && kg >= kb) d[i + 1] = Math.min(d[i + 1], (d[i] + d[i + 2]) / 2 + 10);
+          else if (kb >= kr) d[i + 2] = Math.min(d[i + 2], (d[i] + d[i + 1]) / 2 + 10);
+        }
+      }
+      x.putImageData(img, 0, 0);
+      return cv;
+    } catch { return null; }
   }
 
   private drawText(ctx: CanvasRenderingContext2D, c: Clip, t: number, W: number, H: number) {

@@ -2,6 +2,9 @@
 
 export type ElType = 'text' | 'rect' | 'circle' | 'line' | 'image' | 'chart' | 'table' | 'qr' | 'shape';
 export type ShapeKind = 'triangle' | 'diamond' | 'hexagon' | 'star' | 'arrow' | 'heart' | 'bubble' | 'burst';
+export interface Grad { a: string; b: string; ang: number } // CSS angle: 0 = to top, 90 = to right
+export interface Shadow { blur: number; y: number; op: number; color: string } // page px, page px, 0..100
+export type ImgMask = 'none' | 'circle' | ShapeKind;
 export interface ImgAdjust { bri?: number; con?: number; sat?: number; blur?: number; gray?: number; hue?: number } // -100..100, blur/gray 0..100
 export type Anim = 'none' | 'fade' | 'slide' | 'zoom' | 'pop';
 export type FontKey = 'sans' | 'serif' | 'mono' | 'anton' | 'archivo' | 'bebas' | 'caveat' | 'dmserif' | 'montserrat' | 'playfair';
@@ -30,7 +33,9 @@ export interface El {
   upper?: boolean;
   italic?: boolean;
   ls?: number; // letter spacing in thousandths of an em
-  fx?: { shadow?: boolean; outline?: boolean; bg?: boolean };
+  fx?: { shadow?: boolean; outline?: boolean; bg?: boolean; glow?: boolean };
+  shadow?: Shadow; // drop shadow for any element
+  grad?: Grad; // gradient fill for shapes
   // shapes
   fill?: string;
   radius?: number;
@@ -40,6 +45,8 @@ export interface El {
   mediaId?: string;
   fit?: 'cover' | 'contain';
   adj?: ImgAdjust;
+  mask?: ImgMask;
+  crop?: { z: number; x: number; y: number }; // zoom ≥ 1 and focus point -100..100 inside the frame
   // vector shapes
   shape?: ShapeKind;
   // chart / table / qr
@@ -57,6 +64,7 @@ export interface Page {
   w: number;
   h: number;
   bg: string;
+  bgGrad?: Grad;
   label?: string;
   els: El[];
   dur?: number; // seconds, for animated export
@@ -76,6 +84,10 @@ export interface ClipFx {
   blur?: number; glow?: number; vignette?: number; // 0..100
 }
 
+export interface Keyframe { t: number; x?: number; y?: number; scale?: number; rot?: number; opacity?: number } // t: seconds from clip start
+export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'lighten' | 'darken' | 'difference';
+export type ClipMask = 'none' | 'circle' | 'rounded' | 'heart' | 'star' | 'diamond';
+
 export interface Clip {
   id: string;
   track: TrackId;
@@ -91,6 +103,11 @@ export interface Clip {
   fit?: 'cover' | 'contain';
   x?: number; y?: number; scale?: number; rot?: number; opacity?: number; // transform, percent of frame
   fx?: ClipFx;
+  kf?: Keyframe[];
+  chroma?: { color: string; tol: number }; // green screen: key color and tolerance 0..100
+  blend?: BlendMode;
+  mask?: ClipMask;
+  bgBlur?: boolean; // fill the empty frame with a blurred copy (fit: contain)
   trIn?: { type: 'fade' | 'dip' | 'slide' | 'zoom' | 'blur'; dur: number };
   trOut?: { type: 'fade' | 'dip'; dur: number };
   fadeIn?: number; fadeOut?: number; // audio

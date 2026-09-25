@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, History, Scaling, Presentation, Download, Copy, Trash2, Lock, Unlock, ArrowUpToLine, ArrowDownToLine, Group, Ungroup, Component, CloudCheck, Plus, ChevronLeft, ChevronRight, Sparkles, Layers as LayersIcon, SlidersHorizontal, LayoutGrid, FlipHorizontal2, FlipVertical2, ZoomIn, ZoomOut, Maximize, ClipboardPaste, BringToFront, SendToBack, MousePointer2, Type as TypeIcon, AlignCenter } from 'lucide-react';
+import { Undo2, Redo2, History, Scaling, Presentation, Download, Copy, Trash2, Lock, Unlock, ArrowUpToLine, ArrowDownToLine, Group, Ungroup, Component, CloudCheck, Plus, ChevronLeft, ChevronRight, Sparkles, Layers as LayersIcon, SlidersHorizontal, LayoutGrid, FlipHorizontal2, FlipVertical2, ZoomIn, ZoomOut, Maximize, ClipboardPaste, BringToFront, SendToBack, MousePointer2, Type as TypeIcon, AlignCenter, Paintbrush, ClipboardCheck } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useDesign, snapshot } from './store';
 import { getDoc } from '../lib/docs';
@@ -81,6 +81,8 @@ export function DesignEditor() {
       if (mod && k === 'y') { e.preventDefault(); st.redo(); return; }
       if (mod && k === 'd') { e.preventDefault(); A.duplicateSel(); return; }
       if (mod && k === 'g') { e.preventDefault(); if (e.shiftKey) A.ungroup(); else A.group(); return; }
+      if (mod && e.altKey && (k === 'c' || e.code === 'KeyC')) { e.preventDefault(); if (A.copyStyle()) notify(T('Style copié.', 'Style copied.')); return; }
+      if (mod && e.altKey && (k === 'v' || e.code === 'KeyV')) { e.preventDefault(); A.pasteStyle(); return; }
       if (mod && k === 'c') { if (A.copySel()) e.preventDefault(); return; }
       if (mod && k === 'v') { A.pasteClipboard(); return; }
       if (mod && (k === '=' || k === '+')) { e.preventDefault(); st.setZoom(st.zoom * 1.25); return; }
@@ -113,7 +115,7 @@ export function DesignEditor() {
     window.addEventListener('keydown', onKey);
     window.addEventListener('paste', onPaste);
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('paste', onPaste); };
-  }, [dialog]);
+  }, [dialog, notify, T]);
 
   const host = useMemo(() => designHost(), []);
 
@@ -231,6 +233,8 @@ function Stage() {
       { label: T('Copier', 'Copy'), icon: <Copy size={13} />, kbd: '⌘C', go: () => { A.copySel(); } },
       { label: T('Coller', 'Paste'), icon: <ClipboardPaste size={13} />, kbd: '⌘V', go: A.pasteClipboard },
       { label: T('Dupliquer', 'Duplicate'), icon: <Copy size={13} />, kbd: '⌘D', go: A.duplicateSel },
+      { label: T('Copier le style', 'Copy style'), icon: <Paintbrush size={13} />, kbd: '⌘⌥C', go: () => { A.copyStyle(); } },
+      { label: T('Coller le style', 'Paste style'), icon: <ClipboardCheck size={13} />, kbd: '⌘⌥V', disabled: !A.hasStyle(), go: A.pasteStyle },
       'sep',
       { label: T('Premier plan', 'Bring to front'), icon: <BringToFront size={13} />, kbd: '⇧]', go: () => A.arrange('front') },
       { label: T('Avancer', 'Bring forward'), icon: <ArrowUpToLine size={13} />, kbd: ']', go: () => A.arrange('forward') },

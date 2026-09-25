@@ -186,6 +186,36 @@ export function addVector(shape: ShapeKind) {
   return addElement({ type: 'shape', shape, name: useApp.getState().lang === 'fr' ? def.fr : def.en, w: Math.round(def.ratio < 1 ? k : k), h: Math.round(k * def.ratio), fill: brand.colors[3] ?? '#2E6BFF' });
 }
 
+// Copy / paste style: visual properties only, never text, position or content.
+const STYLE_KEYS = ['fill', 'grad', 'color', 'font', 'size', 'weight', 'lh', 'ls', 'italic', 'upper', 'fx', 'radius', 'stroke', 'strokeW', 'opacity', 'shadow', 'adj', 'mask', 'align'] as const;
+let styleClip: Partial<El> | null = null;
+export function copyStyle() {
+  const el = S().page().els.find((e) => e.id === S().sel[0]);
+  if (!el) return false;
+  styleClip = {};
+  for (const k of STYLE_KEYS) if (el[k] !== undefined) (styleClip as Record<string, unknown>)[k] = deepClone(el[k]);
+  return true;
+}
+export const hasStyle = () => !!styleClip;
+export function pasteStyle() {
+  if (!styleClip || !S().sel.length) return;
+  const st = styleClip;
+  updateEls(S().sel, (e) => {
+    for (const k of STYLE_KEYS) {
+      const v = (st as Record<string, unknown>)[k];
+      if (v === undefined) continue;
+      if (e.type !== 'text' && ['font', 'size', 'weight', 'lh', 'ls', 'italic', 'upper', 'fx', 'color', 'align'].includes(k)) continue;
+      if (e.type !== 'image' && ['adj', 'mask'].includes(k)) continue;
+      (e as unknown as Record<string, unknown>)[k] = deepClone(v);
+    }
+  });
+}
+
+export function setPageGrad(g: Page['bgGrad']) {
+  const i = S().pageIdx;
+  S().apply((d) => { if (g) d.pages[i].bgGrad = g; else delete d.pages[i].bgGrad; }, { keepSel: true, coalesce: 'pgrad' + i });
+}
+
 export function toggleLock() {
   const sel = S().sel;
   const p = S().page();

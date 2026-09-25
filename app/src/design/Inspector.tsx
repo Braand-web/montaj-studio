@@ -4,8 +4,9 @@ import { useApp, useT } from '../store/app';
 import { useDesign } from './store';
 import type { El, FontKey, Page } from '../model/types';
 import { Chips, ColorRow, NumField } from '../ui/kit';
-import { align, animatePage, distribute, setPageBg, updateEls, arrange, flip } from './actions';
-import type { ImgAdjust } from '../model/types';
+import { align, animatePage, distribute, setPageBg, updateEls, arrange, flip, setPageGrad } from './actions';
+import { SHAPES, maskPath } from './shapes';
+import type { ImgAdjust, Grad, ImgMask } from '../model/types';
 import { FONTS, FONT_KEYS } from '../model/fonts';
 import { contrast } from '../lib/util';
 import { dimsLabel } from '../model/formats';
@@ -58,6 +59,7 @@ export function Inspector({ onPreviewAnim }: { onPreviewAnim(): void }) {
             </div>
           </Group>
           {cur.type === 'text' && <TextProps el={cur} upd={upd} />}
+          {cur.type === 'image' && <ImageFrame el={cur} upd={upd} />}
           {cur.type === 'image' && cur.mediaId && <ImageAdjust el={cur} upd={upd} />}
           {cur.type === 'shape' && (
             <Group label={T('Contour', 'Outline')}>
@@ -79,8 +81,12 @@ export function Inspector({ onPreviewAnim }: { onPreviewAnim(): void }) {
         </>
       )}
       <Group label={colorKey === 'color' ? T('Couleur du texte', 'Text color') : T('Couleur', 'Color')}>
-        <ColorRow colors={palette} value={colorVal} onPick={(c) => upd((e) => { if (e.type === 'text') e.color = c; else e.fill = c; })} />
+        <ColorRow colors={palette} value={cur?.grad ? undefined : colorVal} onPick={(c) => upd((e) => { if (e.type === 'text') e.color = c; else { e.fill = c; delete e.grad; } })} />
       </Group>
+      {cur && (cur.type === 'rect' || cur.type === 'circle' || cur.type === 'shape') && (
+        <GradEditor value={cur.grad} fallback={cur.fill ?? '#2E6BFF'} palette={palette} onChange={(g) => upd((e) => { if (g) e.grad = g; else delete e.grad; })} />
+      )}
+      {cur && cur.type !== 'line' && <ShadowEditor el={cur} upd={upd} />}
       {lowContrast && <div className="warn" style={{ fontSize: 12 }}>{T('Contraste faible avec le fond : le texte sera difficile à lire. Ajoute un fond ou un contour, ou change la couleur.', 'Low contrast with the background: the text will be hard to read. Add a background or outline, or change the color.')} ({contrast(cur!.color ?? '#0F1115', page.bg).toFixed(1)}:1)</div>}
       {cur && (
         <Group label={T('Animation d’entrée', 'Entrance animation')}>
@@ -133,9 +139,9 @@ function TextProps({ el, upd }: { el: El; upd(p: Partial<El> | ((e: El) => void)
         <button className={'btn icon' + (el.italic ? ' primary' : '')} aria-pressed={!!el.italic} title={T('Italique', 'Italic')} onClick={() => upd({ italic: !el.italic })}><Italic size={14} /></button>
       </div>
       <Group label={T('Effets', 'Effects')}>
-        <Chips small value={[el.fx?.shadow ? 'shadow' : '', el.fx?.outline ? 'outline' : '', el.fx?.bg ? 'bg' : '', el.upper ? 'upper' : ''].filter(Boolean) as ('shadow' | 'outline' | 'bg' | 'upper')[]}
+        <Chips small value={[el.fx?.shadow ? 'shadow' : '', el.fx?.outline ? 'outline' : '', el.fx?.bg ? 'bg' : '', el.fx?.glow ? 'glow' : '', el.upper ? 'upper' : ''].filter(Boolean) as ('shadow' | 'outline' | 'bg' | 'glow' | 'upper')[]}
           onChange={(k) => upd((e) => { if (k === 'upper') e.upper = !e.upper; else e.fx = { ...e.fx, [k]: !e.fx?.[k] }; })}
-          options={[{ id: 'shadow' as const, label: T('Ombre', 'Shadow') }, { id: 'outline' as const, label: T('Contour', 'Outline') }, { id: 'bg' as const, label: T('Fond', 'Background') }, { id: 'upper' as const, label: 'MAJ' }]} />
+          options={[{ id: 'shadow' as const, label: T('Ombre', 'Shadow') }, { id: 'outline' as const, label: T('Contour', 'Outline') }, { id: 'bg' as const, label: T('Fond', 'Background') }, { id: 'glow' as const, label: T('Néon', 'Neon') }, { id: 'upper' as const, label: 'MAJ' }]} />
       </Group>
     </>
   );
@@ -184,6 +190,100 @@ function ImageAdjust({ el, upd }: { el: El; upd(p: Partial<El> | ((e: El) => voi
   );
 }
 
+const GRAD_PRESETS: Grad[] = [
+  { a: '#0A84FF', b: '#BF5AF2', ang: 135 }, { a: '#FF9F0A', b: '#FF375F', ang: 135 }, { a: '#30D158', b: '#0A84FF', ang: 160 },
+  { a: '#FFD60A', b: '#FF9F0A', ang: 180 }, { a: '#1C1C1E', b: '#48484A', ang: 180 }, { a: '#FF6CAB', b: '#7366FF', ang: 90 },
+];
+
+function GradEditor({ value, fallback, palette, onChange }: { value?: Grad; fallback: string; palette: string[]; onChange(g: Grad | undefined): void }) {
+  const T = useT();
+  const [end, setEnd] = useState<'a' | 'b'>('a');
+  return (
+    <div className="col" style={{ gap: 6 }}>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{T('Dégradé', 'Gradient')}</span>
+        <button className="btn sm ghost" onClick={() => onChange(value ? undefined : { a: fallback, b: '#BF5AF2', ang: 135 })}>{value ? T('Retirer', 'Remove') : T('Ajouter', 'Add')}</button>
+      </div>
+      <div className="row wrap" style={{ gap: 6 }}>
+        {GRAD_PRESETS.map((g, i) => <button key={i} title={`${g.a} → ${g.b}`} onClick={() => onChange({ ...g })} style={{ width: 28, height: 28, borderRadius: 10, border: value && value.a === g.a && value.b === g.b ? '2px solid var(--acc)' : '1px solid var(--line2)', background: `linear-gradient(${g.ang}deg, ${g.a}, ${g.b})`, padding: 0 }} />)}
+      </div>
+      {value && (
+        <>
+          <div className="seg-sm" style={{ alignSelf: 'flex-start' }}>
+            <button className={end === 'a' ? 'on' : ''} onClick={() => setEnd('a')}><span style={{ width: 12, height: 12, borderRadius: 4, background: value.a }} />{T('Début', 'Start')}</button>
+            <button className={end === 'b' ? 'on' : ''} onClick={() => setEnd('b')}><span style={{ width: 12, height: 12, borderRadius: 4, background: value.b }} />{T('Fin', 'End')}</button>
+          </div>
+          <ColorRow size={24} colors={palette} value={value[end]} onPick={(c) => onChange({ ...value, [end]: c })} />
+          <Range id="grad-ang" label={T('Angle', 'Angle')} value={value.ang} min={0} max={360} step={5} suffix="°" onChange={(v) => onChange({ ...value, ang: v })} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ShadowEditor({ el, upd }: { el: El; upd(p: Partial<El> | ((e: El) => void)): void }) {
+  const T = useT();
+  const sh = el.shadow;
+  const set = (p: Partial<NonNullable<El['shadow']>>) => upd((e) => { e.shadow = { blur: 30, y: 12, op: 35, color: '#000000', ...e.shadow, ...p }; });
+  return (
+    <Group label={T('Ombre portée', 'Drop shadow')}>
+      <div className="row" style={{ gap: 6 }}>
+        <div className="seg-sm">
+          {([['none', T('Aucune', 'None')], ['soft', T('Douce', 'Soft')], ['hard', T('Marquée', 'Hard')], ['glow', T('Halo', 'Glow')]] as const).map(([k, l]) => (
+            <button key={k} className={(k === 'none' && !sh) || (sh && k !== 'none' && ((k === 'soft' && sh.blur >= 20 && sh.y > 0 && sh.color === '#000000') || (k === 'hard' && sh.blur < 20) || (k === 'glow' && sh.y === 0))) ? 'on' : ''}
+              onClick={() => upd((e) => {
+                if (k === 'none') delete e.shadow;
+                else e.shadow = k === 'soft' ? { blur: 40, y: 16, op: 35, color: '#000000' } : k === 'hard' ? { blur: 0, y: 14, op: 60, color: '#000000' } : { blur: 50, y: 0, op: 80, color: e.fill && /^#/.test(e.fill) ? e.fill : '#0A84FF' };
+              })}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {sh && (
+        <>
+          <Range id="sh-blur" label={T('Flou', 'Blur')} value={sh.blur} min={0} max={120} onChange={(v) => set({ blur: v })} />
+          <Range id="sh-y" label={T('Distance', 'Distance')} value={sh.y} min={-60} max={60} onChange={(v) => set({ y: v })} />
+          <Range id="sh-op" label={T('Intensité', 'Strength')} value={sh.op} min={0} max={100} suffix="%" onChange={(v) => set({ op: v })} />
+        </>
+      )}
+    </Group>
+  );
+}
+
+const MASKS: { k: ImgMask; fr: string; en: string }[] = [
+  { k: 'none', fr: 'Aucun', en: 'None' }, { k: 'circle', fr: 'Cercle', en: 'Circle' },
+  ...SHAPES.filter((s) => s.k !== 'arrow' && s.k !== 'bubble').map((s) => ({ k: s.k as ImgMask, fr: s.fr, en: s.en })),
+];
+
+function ImageFrame({ el, upd }: { el: El; upd(p: Partial<El> | ((e: El) => void)): void }) {
+  const T = useT();
+  const cr = el.crop ?? { z: 1, x: 0, y: 0 };
+  const setCrop = (p: Partial<typeof cr>) => upd((e) => { e.crop = { ...cr, ...e.crop, ...p }; });
+  return (
+    <>
+      <Group label={T('Forme du cadre', 'Frame shape')}>
+        <div className="row wrap" style={{ gap: 4 }}>
+          {MASKS.map((m) => {
+            const d = m.k === 'none' ? 'M2 2H22V22H2Z' : maskPath(m.k, 20, 20);
+            return (
+              <button key={m.k} title={T(m.fr, m.en)} aria-label={T(m.fr, m.en)} onClick={() => upd((e) => { if (m.k === 'none') delete e.mask; else e.mask = m.k; })}
+                style={{ width: 34, height: 34, borderRadius: 10, border: (el.mask ?? 'none') === m.k ? '2px solid var(--acc)' : '1px solid var(--line2)', background: 'var(--panel2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                <svg width={20} height={20} viewBox={m.k === 'none' ? '0 0 24 24' : '0 0 20 20'} aria-hidden><path d={d!} fill="var(--tx2)" /></svg>
+              </button>
+            );
+          })}
+        </div>
+      </Group>
+      {el.mediaId && (
+        <Group label={T('Recadrage', 'Crop')}>
+          <Range id="crop-z" label={T('Zoom', 'Zoom')} value={Math.round(cr.z * 100)} min={100} max={400} step={5} suffix="%" onChange={(v) => setCrop({ z: v / 100 })} />
+          <Range id="crop-x" label={T('Position horizontale', 'Horizontal position')} value={cr.x} min={-100} max={100} onChange={(v) => setCrop({ x: v })} />
+          <Range id="crop-y" label={T('Position verticale', 'Vertical position')} value={cr.y} min={-100} max={100} onChange={(v) => setCrop({ y: v })} />
+        </Group>
+      )}
+    </>
+  );
+}
+
 function DataProps({ el, upd }: { el: El; upd(p: Partial<El> | ((e: El) => void)): void }) {
   const T = useT();
   const initial = el.type === 'chart' ? (el.data ?? []).map((r) => `${r[0]};${String(r[1]).replace('.', ',')}`).join('\n') : el.type === 'table' ? (el.rows ?? []).map((r) => r.join(';')).join('\n') : el.qr ?? '';
@@ -218,8 +318,9 @@ function PageProps({ page, onPreviewAnim }: { page: Page; onPreviewAnim(): void 
       <span className="eyebrow">{T('Page', 'Page')} {pageIdx + 1} · {dimsLabel(page.w, page.h)}</span>
       <span className="muted pretty" style={{ fontSize: 12 }}>{T('Sélectionne un élément pour le modifier. Maj+clic ou glisser sur la page pour en sélectionner plusieurs.', 'Select an element to edit it. Shift+click or drag on the page to select several.')}</span>
       <Group label={T('Fond de la page', 'Page background')}>
-        <ColorRow colors={[...new Set([...brand.colors, '#FFFFFF', '#000000'])]} value={page.bg} onPick={setPageBg} />
+        <ColorRow colors={[...new Set([...brand.colors, '#FFFFFF', '#000000'])]} value={page.bgGrad ? undefined : page.bg} onPick={(c) => { setPageBg(c); if (page.bgGrad) setPageGrad(undefined); }} />
       </Group>
+      <GradEditor value={page.bgGrad} fallback={page.bg} palette={[...new Set([...brand.colors, '#FFFFFF', '#000000'])]} onChange={setPageGrad} />
       <div className="col" style={{ gap: 6 }}>
         <button className="btn" onClick={() => animatePage(page)}>{T('Animer toute la page', 'Animate whole page')}</button>
         <button className="btn ghost" onClick={onPreviewAnim}><Play size={12} />{T('Aperçu des animations', 'Preview animations')}</button>

@@ -165,13 +165,14 @@ export function findEl(d: DesignData, id: string): { page: Page; el: El; pi: num
 export function newEl(p: Partial<El> & Pick<El, 'type'>, page: Page): El {
   const w = p.w ?? Math.round(page.w * 0.4);
   const h = p.h ?? Math.round(page.h * 0.2);
+  // Spread first: an explicit `undefined` in p must not erase the centered defaults.
   return {
+    ...p,
     id: uid('e'),
     name: p.name ?? p.type,
     x: p.x ?? Math.round((page.w - w) / 2),
     y: p.y ?? Math.round((page.h - h) / 2),
     w, h,
-    ...p,
   } as El;
 }
 

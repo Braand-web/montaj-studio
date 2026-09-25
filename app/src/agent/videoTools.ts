@@ -127,8 +127,8 @@ export function videoTools(t: DataTarget<VideoData>, ctx: { media: () => MediaIt
     },
     {
       name: 'update_clip', write: true,
-      description: 'Changes a clip: start, dur, in (source offset), track, speed (0.25–4), volume (0–1), muted, text (title clips), fit (cover/contain), scale, x, y (% offsets), opacity (0–1).',
-      schema: { id: { type: 'string' }, start: { type: 'number' }, dur: { type: 'number' }, in: { type: 'number' }, track: { type: 'string', enum: TRACKS.map((x) => x.id) }, speed: { type: 'number' }, volume: { type: 'number' }, muted: { type: 'boolean' }, text: { type: 'string' }, fit: { type: 'string', enum: ['cover', 'contain'] }, scale: { type: 'number' }, x: { type: 'number' }, y: { type: 'number' }, opacity: { type: 'number' } },
+      description: 'Changes a clip: start, dur, in (source offset), track, speed (0.25–4), volume (0–1), muted, text (title clips), fit (cover/contain), scale, x, y (% offsets), opacity (0–1), mask (none/circle/rounded/heart/star/diamond), blend (normal/screen/multiply/overlay/lighten/darken/difference), bgBlur (blurred fill behind a contained clip), chroma ({color hex, tol 0-100} to remove a green screen, or null), kf (keyframes: array of {t seconds from clip start, x, y, scale, rot, opacity}, or [] to remove).',
+      schema: { id: { type: 'string' }, start: { type: 'number' }, dur: { type: 'number' }, in: { type: 'number' }, track: { type: 'string', enum: TRACKS.map((x) => x.id) }, speed: { type: 'number' }, volume: { type: 'number' }, muted: { type: 'boolean' }, text: { type: 'string' }, fit: { type: 'string', enum: ['cover', 'contain'] }, scale: { type: 'number' }, x: { type: 'number' }, y: { type: 'number' }, opacity: { type: 'number' }, mask: { type: 'string', enum: ['none', 'circle', 'rounded', 'heart', 'star', 'diamond'] }, blend: { type: 'string', enum: ['normal', 'screen', 'multiply', 'overlay', 'lighten', 'darken', 'difference'] }, bgBlur: { type: 'boolean' }, chroma: { type: 'object' }, kf: { type: 'array' } },
       required: ['id'],
       run: (a) => {
         t.write((d) => {
@@ -139,6 +139,15 @@ export function videoTools(t: DataTarget<VideoData>, ctx: { media: () => MediaIt
           if (a.muted !== undefined) c.muted = bool(a.muted);
           if (a.text !== undefined) c.text = str(a.text);
           if (a.fit !== undefined) c.fit = str(a.fit) === 'contain' ? 'contain' : 'cover';
+          if (a.mask !== undefined) { const v = str(a.mask); if (v && ['none', 'circle', 'rounded', 'heart', 'star', 'diamond'].includes(v)) c.mask = v as Clip['mask']; }
+          if (a.blend !== undefined) { const v = str(a.blend); if (v && ['normal', 'screen', 'multiply', 'overlay', 'lighten', 'darken', 'difference'].includes(v)) c.blend = v as Clip['blend']; }
+          if (a.bgBlur !== undefined) c.bgBlur = !!a.bgBlur;
+          if (a.chroma === null) delete c.chroma;
+          else if (a.chroma && typeof a.chroma === 'object') { const o = a.chroma as Record<string, unknown>; c.chroma = { color: str(o.color) ?? '#00FF00', tol: Math.max(0, Math.min(100, num(o.tol) ?? 35)) }; }
+          if (Array.isArray(a.kf)) {
+            const kf = (a.kf as Record<string, unknown>[]).map((f) => { const o: Record<string, number> = { t: Math.max(0, Math.min(c.dur, num(f.t) ?? 0)) }; for (const k of ['x', 'y', 'scale', 'rot', 'opacity']) { const v = num(f[k]); if (v !== undefined) o[k] = v; } return o as unknown as NonNullable<Clip['kf']>[number]; }).sort((p, q) => p.t - q.t);
+            if (kf.length) c.kf = kf; else delete c.kf;
+          }
           const tr = str(a.track) as TrackId | undefined;
           if (tr) { const def = TRACKS.find((x) => x.id === tr); if (!def?.accepts.includes(c.kind)) throw new Error(`${c.kind} clips cannot go on track ${tr}`); c.track = tr; }
           mark(c.id, `${c.name} modifié (${Object.keys(a).filter((k) => k !== 'id').join(', ')})`);

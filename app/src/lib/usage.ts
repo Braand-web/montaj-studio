@@ -3,7 +3,7 @@ import { get, put } from './db';
 
 // Local log of every request sent to Claude from this device, plus the daily limit.
 
-export type UsageSource = 'composer-design' | 'composer-video' | 'studio-chat' | 'ai-write' | 'ai-translate' | 'test';
+export type UsageSource = 'composer-design' | 'composer-video' | 'studio-chat' | 'ai-write' | 'ai-translate' | 'ai-critique' | 'ai-palette' | 'ai-caption' | 'ai-publish' | 'test';
 export interface UsageRow { id: string; at: number; source: UsageSource; tier: string; tools: number; ms: number; status: 'ok' | 'error' | 'stopped'; code?: string; chars: number }
 
 interface UsageState {

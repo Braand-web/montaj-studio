@@ -6,8 +6,7 @@ import { addImageFromMedia, addShape, addText, setImageMedia, updateEls, setPage
 import { SHAPES, shapePath } from './shapes';
 import { importFiles, listMedia, onMediaChange } from '../lib/media';
 import type { MediaItem } from '../model/types';
-import { getSample, sampleErrorText } from '../lib/claude';
-import { tracked } from '../lib/usage';
+import { AiTab } from './AiTab';
 import { FONTS } from '../model/fonts';
 
 export type LeftTab = 'text' | 'shapes' | 'media' | 'brand' | 'ai';
@@ -187,82 +186,6 @@ function BrandTab() {
         </button>
       ))}
       <button className="btn ghost" onClick={() => useApp.getState().go('brand')}>{T('Modifier le kit de marque', 'Edit brand kit')}</button>
-    </>
-  );
-}
-
-const LANGS = [['en', 'English'], ['fr', 'Français'], ['es', 'Español'], ['pt', 'Português'], ['ar', 'العربية'], ['wo', 'Wolof'], ['sw', 'Kiswahili']];
-
-function AiTab() {
-  const T = useT();
-  const lang = useApp((s) => s.lang);
-  const brand = useApp((s) => s.brand);
-  const notify = useApp((s) => s.notify);
-  const sel = useDesign((s) => s.sel);
-  const [prompt, setPrompt] = useState('');
-  const [busy, setBusy] = useState<string | null>(null);
-  const [avail, setAvail] = useState<boolean | null>(null);
-  useEffect(() => { void getSample().then((s) => setAvail(!!s)); }, []);
-  const fr = lang === 'fr';
-
-  const write = async () => {
-    const sample = await getSample();
-    if (!sample || !prompt.trim()) return;
-    setBusy('write');
-    try {
-      const { text } = await tracked('ai-write', 'quick', () => sample(
-        `Write short copy for a visual design. Brief: ${prompt}\nBrand voice: ${brand.tone}\nLanguage: ${fr ? 'French' : 'English'}.\nReply with only the text to place on the design, no quotes, no preamble, at most 2 short lines.`,
-        { modelTier: 'quick', cache: false },
-      ), (r) => r.text.length);
-      const clean = text.trim().replace(/^["«»“”]+|["«»“”]+$/g, '');
-      const st = useDesign.getState();
-      const target = st.page().els.find((e) => sel.length === 1 && e.id === sel[0] && e.type === 'text');
-      if (target) updateEls([target.id], { text: clean });
-      else { const id = addText('subtitle'); updateEls([id], { text: clean }); }
-      notify(T('Texte ajouté. ⌘Z pour annuler.', 'Text added. ⌘Z to undo.'));
-    } catch (e) {
-      notify(sampleErrorText((e as { code?: string }).code, fr), 'err');
-    } finally { setBusy(null); }
-  };
-
-  const translate = async (code: string, name: string) => {
-    const sample = await getSample();
-    if (!sample) return;
-    const st = useDesign.getState();
-    const texts = st.page().els.filter((e) => e.type === 'text' && e.text?.trim());
-    if (!texts.length) { notify(T('Aucun texte sur cette page.', 'No text on this page.'), 'err'); return; }
-    setBusy('tr-' + code);
-    try {
-      const src = Object.fromEntries(texts.map((e) => [e.id, e.text]));
-      const out = await tracked('ai-translate', 'quick', () => sample.json<Record<string, string>>(
-        `Translate the values of this JSON object into ${name} (${code}). Keep the same keys, keep line breaks, keep it short enough for a design, keep brand names. Reply with only the JSON object.\n\n${JSON.stringify(src)}`,
-        { modelTier: 'quick' },
-      ));
-      const ids = texts.map((e) => e.id).filter((id) => typeof out?.[id] === 'string');
-      updateEls(ids, (e) => { e.text = out[e.id]; });
-      notify(T(`Page traduite (${ids.length} textes). ⌘Z pour annuler.`, `Page translated (${ids.length} texts). ⌘Z to undo.`));
-    } catch (e) {
-      notify(sampleErrorText((e as { code?: string }).code, fr), 'err');
-    } finally { setBusy(null); }
-  };
-
-  if (avail === false) {
-    return <div className="muted pretty" style={{ fontSize: 12 }}>{T("Les outils IA utilisent ton compte Claude : ouvre l'application depuis claude.ai, connecté, pour les activer.", 'AI tools use your Claude account: open the app from claude.ai, signed in, to turn them on.')}</div>;
-  }
-  return (
-    <>
-      <span className="eyebrow">{T('Rédiger un texte', 'Write copy')}</span>
-      <textarea id="ai-write" className="input" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={T('Ex. accroche pour une promo de rentrée, ton joyeux', 'e.g. hook for a back-to-school promo, upbeat tone')} />
-      <button className="btn primary" disabled={!!busy || !prompt.trim()} onClick={() => void write()}>{busy === 'write' ? T('Rédaction…', 'Writing…') : sel.length === 1 ? T('Remplacer le texte sélectionné', 'Replace selected text') : T('Écrire et ajouter', 'Write and add')}</button>
-      <span className="faint" style={{ fontSize: 11 }}>{T('Claude · respecte le ton de ton kit de marque.', 'Claude · follows your brand kit voice.')}</span>
-      <div style={{ height: 1, background: 'var(--line)', margin: '6px 0' }} />
-      <span className="eyebrow">{T('Traduire la page', 'Translate page')}</span>
-      <div className="row wrap" style={{ gap: 4 }}>
-        {LANGS.map(([c, n]) => <button key={c} className="chip sm" disabled={!!busy} onClick={() => void translate(c, n)}>{busy === 'tr-' + c ? '…' : n}</button>)}
-      </div>
-      <div style={{ height: 1, background: 'var(--line)', margin: '6px 0' }} />
-      <span className="eyebrow">{T('Générer une image', 'Generate an image')}</span>
-      <span className="faint pretty" style={{ fontSize: 11 }}>{T('Bientôt : la génération d’images demande une clé de fournisseur (OpenAI, fal.ai…) et la passerelle serveur, pas encore déployées.', 'Soon: image generation needs a provider key (OpenAI, fal.ai…) and the server gateway, not deployed yet.')}</span>
     </>
   );
 }

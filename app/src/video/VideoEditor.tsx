@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack, LayoutGrid, Repeat, ImageDown, SkipForward, Diamond, Snowflake, Pipette, Trash2 } from 'lucide-react';
 import { useApp, useT } from '../store/app';
-import { useVideo, V, newClip, freeTrack, trackEnd, duration, defaultFx, videoSnapshot, fmtDur } from './store';
+import { useVideo, V, newClip, freeTrack, trackEnd, duration, defaultFx, videoSnapshot, fmtDur, frameGrab } from './store';
 import { Engine } from './engine';
 import { transformAt, upsertKf, kfIndexAt, type KfProp } from './keyframes';
 import { Timeline } from './Timeline';
@@ -14,7 +14,9 @@ import { useImages } from '../design/LeftPanel';
 import { Chips, LogoMark, Modal, Progress, Switch } from '../ui/kit';
 import { VersionsPanel } from '../ui/Versions';
 import { parseSubtitles, toSrt, toVtt, textToCaptions } from './captions';
-import { saveFile } from '../lib/claude';
+import { saveFile, getSample, sampleErrorText } from '../lib/claude';
+import { tracked } from '../lib/usage';
+import { aiLimits } from '../lib/ai';
 import { recordCanvas, bestVideoMime, canRecord } from '../lib/record';
 import { tc, uid, slug } from '../lib/util';
 import { FONTS, FONT_KEYS } from '../model/fonts';
@@ -210,7 +212,13 @@ function Preview() {
       useVideo.getState().setPlaying(false);
     };
     engine.seek(useVideo.getState().t);
-    return () => { saveThumb(); engine?.destroy(); engine = null; };
+    frameGrab.fn = async () => {
+      if (!engine || !useVideo.getState().view().clips.length) return null;
+      const c = document.createElement('canvas');
+      engine.drawTo(c, engine.t);
+      return canvasBlob(c, 'image/jpeg', 0.85).catch(() => null);
+    };
+    return () => { frameGrab.fn = null; saveThumb(); engine?.destroy(); engine = null; };
   }, []);
   useEffect(() => {
     engine?.setData(view);
@@ -574,6 +582,7 @@ function Inspector() {
         <div className="col" style={{ gap: 6 }}><span style={{ fontSize: 11, color: 'var(--tx3)' }}>{T('Fond', 'Background')}</span>
           <div className="row wrap" style={{ gap: 6 }}>{['#000000', ...brand.colors].map((h) => <button key={h} onClick={() => useVideo.getState().apply((d) => { d.bg = h; })} style={{ width: 28, height: 28, borderRadius: 10, border: view.bg === h ? '2px solid var(--acc)' : '1px solid var(--line2)', background: h }} title={h} />)}</div>
         </div>
+        <PublishKit />
         <span className="muted pretty" style={{ fontSize: 12 }}>{T('Sélectionne un clip pour régler sa couleur, ses effets, son filtre et sa transition. Raccourcis : Espace ou K lecture, J/L ±1 s, S scinder, ⌘D dupliquer, ⇧Suppr supprimer et refermer, M marqueur, ← → image par image. Clic droit sur un clip pour plus d’actions.', 'Select a clip to adjust its color, effects, filter and transition. Shortcuts: Space or K play, J/L ±1 s, S split, ⌘D duplicate, ⇧Del ripple delete, M marker, ← → frame by frame. Right-click a clip for more.')}</span>
       </div>
     );
@@ -704,6 +713,71 @@ const BLENDS: { k: BlendMode; fr: string; en: string }[] = [
   { k: 'normal', fr: 'Normal', en: 'Normal' }, { k: 'screen', fr: 'Superposition claire (écran)', en: 'Screen' }, { k: 'multiply', fr: 'Produit', en: 'Multiply' },
   { k: 'overlay', fr: 'Incrustation', en: 'Overlay' }, { k: 'lighten', fr: 'Éclaircir', en: 'Lighten' }, { k: 'darken', fr: 'Assombrir', en: 'Darken' }, { k: 'difference', fr: 'Différence', en: 'Difference' },
 ];
+
+interface Kit { title: string; description: string; hashtags: string[]; chapters: { t: number; title: string }[] }
+
+// AI publishing kit: title, description, hashtags and chapters from what the video contains.
+function PublishKit() {
+  const T = useT();
+  const lang = useApp((s) => s.lang);
+  const brand = useApp((s) => s.brand);
+  const notify = useApp((s) => s.notify);
+  const [platform, setPlatform] = useState('YouTube');
+  const [busy, setBusy] = useState(false);
+  const [kit, setKit] = useState<Kit | null>(null);
+  const [avail, setAvail] = useState(false);
+  useEffect(() => { void getSample().then((x) => setAvail(!!x)); }, []);
+  if (!avail) return null;
+  const fr = lang === 'fr';
+  const run = async () => {
+    const sample = await getSample();
+    if (!sample) return;
+    setBusy(true); setKit(null);
+    try {
+      const d = useVideo.getState().data();
+      const dur = duration(d);
+      const lim = await aiLimits();
+      const img = lim.images && frameGrab.fn ? await frameGrab.fn() : null;
+      const facts = {
+        durationSec: Math.round(dur), format: `${d.w}x${d.h}`,
+        titles: d.clips.filter((c) => c.kind === 'text').map((c) => ({ t: Math.round(c.start), text: c.text })),
+        clips: d.clips.filter((c) => c.kind !== 'text').map((c) => ({ t: Math.round(c.start), name: c.name, kind: c.kind })).slice(0, 40),
+        markers: d.markers.map((m) => Math.round(m)),
+        captions: d.captions.map((c) => `[${Math.round(c.start)}s] ${c.text}`).join(' ').slice(0, 12000),
+      };
+      const out = await tracked('ai-publish', 'default', () => sample.json<Kit>(
+        `Prepare the publishing kit for this video on ${platform}.${img ? ' The attached image is a frame of the video.' : ''} Video facts (JSON): ${JSON.stringify(facts)}\nBrand "${brand.name}", voice: ${brand.tone}. Language: ${fr ? 'French (tutoiement)' : 'English'}.\n` +
+        `Follow ${platform} norms (title length, description style). Hook in the title, no clickbait lies, never invent facts not supported by the content. ` +
+        `Chapters only if the video is longer than 60 s and ${platform} supports them: start at 0, use titles, markers and captions to place them. Hashtags: 3 to 8.\n` +
+        `Reply with only JSON: {"title": string, "description": string, "hashtags": ["#tag"], "chapters": [{"t": seconds, "title": string}]}.`,
+        { modelTier: 'default', cache: false, images: img ? [img] : undefined },
+      ));
+      setKit({
+        title: String(out?.title ?? ''), description: String(out?.description ?? ''),
+        hashtags: (out?.hashtags ?? []).map((h) => '#' + String(h).replace(/^#/, '').replace(/\s+/g, '')).slice(0, 10),
+        chapters: (out?.chapters ?? []).map((c) => ({ t: Math.max(0, Math.min(dur, Number(c.t) || 0)), title: String(c.title ?? '') })).filter((c) => c.title).sort((a, b) => a.t - b.t),
+      });
+    } catch (e) { notify(sampleErrorText((e as { code?: string }).code, fr), 'err'); } finally { setBusy(false); }
+  };
+  const all = kit ? [kit.title, '', kit.description, kit.chapters.length ? '\n' + kit.chapters.map((c) => `${fmtDur(c.t)} ${c.title}`).join('\n') : '', '', kit.hashtags.join(' ')].join('\n').replace(/\n{3,}/g, '\n\n').trim() : '';
+  return (
+    <div className="col" style={{ gap: 8, padding: 12, borderRadius: 12, background: 'var(--panel2)' }}>
+      <span className="eyebrow row" style={{ gap: 6 }}><Sparkles size={12} />{T('Kit de publication IA', 'AI publishing kit')}</span>
+      <span className="faint pretty" style={{ fontSize: 11 }}>{T('Titre, description, hashtags et chapitres à partir des titres, sous-titres et marqueurs de ta vidéo.', 'Title, description, hashtags and chapters from your video’s titles, captions and markers.')}</span>
+      <div className="row wrap" style={{ gap: 4 }}>{['YouTube', 'TikTok', 'Instagram', 'LinkedIn'].map((p) => <button key={p} className={'chip sm' + (platform === p ? ' on' : '')} onClick={() => setPlatform(p)}>{p}</button>)}</div>
+      <button className="btn" disabled={busy} onClick={() => void run()}>{busy ? T('Préparation…', 'Preparing…') : T('Préparer la publication', 'Prepare the post')}</button>
+      {kit && (
+        <>
+          <textarea className="input" rows={9} value={all} readOnly />
+          <div className="row wrap" style={{ gap: 6 }}>
+            <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(all); notify(T('Copié.', 'Copied.')); } catch { notify(T('Copie bloquée : sélectionne le texte et copie-le.', 'Copy blocked: select the text and copy it.'), 'info'); } }}>{T('Copier tout', 'Copy all')}</button>
+            {kit.chapters.length > 0 && <button className="btn sm" onClick={() => { useVideo.getState().apply((d) => { for (const c of kit.chapters) if (!d.markers.some((m) => Math.abs(m - c.t) < 0.05)) d.markers.push(Math.round(c.t * 100) / 100); }); notify(T('Chapitres ajoutés comme marqueurs.', 'Chapters added as markers.')); }}>{T('Chapitres → marqueurs', 'Chapters → markers')}</button>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function KeyframeBar({ c, local }: { c: Clip; local: number }) {
   const T = useT();

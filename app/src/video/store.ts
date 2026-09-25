@@ -224,3 +224,6 @@ export function freeTrack(d: VideoData, pref: TrackId, start: number, dur: numbe
 export function trackEnd(d: VideoData, tr: TrackId) {
   return Math.max(0, ...d.clips.filter((c) => c.track === tr).map((c) => c.start + c.dur));
 }
+
+// Set by the preview while it is mounted: renders the frame under the playhead for the assistant.
+export const frameGrab: { fn: (() => Promise<Blob | null>) | null } = { fn: null };

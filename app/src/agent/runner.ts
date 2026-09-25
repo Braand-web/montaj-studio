@@ -1,6 +1,7 @@
 import { getSample, sampleErrorText, type Msg, type SampleTool } from '../lib/claude';
 import type { AgentMode, Tier } from '../store/app';
 import { overBudget, useUsage, type UsageSource } from '../lib/usage';
+import { NEXT_RULE } from '../lib/ai';
 
 // Agent loop (SPEC §9): Claude reads the document summary, calls page tools that go through
 // the same engine as the UI, and reports what it did. Nothing is simulated.
@@ -21,7 +22,7 @@ export interface RunCallbacks {
   onStep(step: Step): void;
 }
 
-export interface RunResult { text: string; error?: string; code?: string; truncated?: boolean }
+export interface RunResult { text: string; error?: string; code?: string; truncated?: boolean; sentImages?: number }
 
 let stepSeq = 0;
 
@@ -41,6 +42,7 @@ export async function runAgent(opts: {
   fr: boolean;
   cb: RunCallbacks;
   source: UsageSource;
+  images?: Blob[];
 }): Promise<RunResult> {
   if (overBudget()) {
     return { text: '', code: 'budget', error: opts.fr ? 'Limite quotidienne de requêtes atteinte. Modifie-la dans Utilisation IA.' : 'Daily request limit reached. Change it in AI usage.' };
@@ -55,11 +57,13 @@ export async function runAgent(opts: {
         : 'The assistant runs on your Claude account: open this app from claude.ai, signed in, to turn it on. Manual editing works everywhere.',
     };
   }
-  let toolsOk = true;
+  let toolsOk = true, maxImages = 0;
   try {
     const lim = await sample.limits();
     toolsOk = !!lim.tools;
+    maxImages = lim.images?.maxCount ?? 0;
   } catch { toolsOk = false; }
+  const images = maxImages ? (opts.images ?? []).slice(0, maxImages) : [];
 
   const usable = opts.tools.filter((t) => opts.mode !== 'ask' || !t.write);
   const sampleTools: SampleTool[] = toolsOk
@@ -92,7 +96,7 @@ export async function runAgent(opts: {
       : (opts.fr ? 'Utilise les outils pour faire réellement les modifications demandées, puis résume ce que tu as fait.' : 'Use the tools to actually make the requested changes, then summarize what you did.');
 
   const input: Msg[] = [
-    { role: 'user', content: opts.rules + '\n\n' + modeLine },
+    { role: 'user', content: opts.rules + '\n\n' + modeLine + '\n' + NEXT_RULE(opts.fr) },
     ...opts.history.slice(-8),
     { role: 'user', content: opts.prompt },
   ];
@@ -105,11 +109,12 @@ export async function runAgent(opts: {
       signal: opts.signal,
       tools: sampleTools.length ? sampleTools : undefined,
       modelTier: opts.tier,
+      images: images.length ? images : undefined,
       cache: sampleTools.length ? undefined : false,
       onText: ({ text }) => opts.cb.onText(text),
     });
     log('ok', undefined, res.text.length);
-    return { text: res.text, truncated: res.truncated };
+    return { text: res.text, truncated: res.truncated, sentImages: images.length };
   } catch (e) {
     const err = e as { code?: string; text?: string };
     if (err?.code === 'cancelled') { log('stopped', 'cancelled'); return { text: err.text ?? '', code: 'cancelled' }; }

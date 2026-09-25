@@ -1,7 +1,7 @@
 import type { ComposerHost, RunSession } from '../agent/Composer';
 import type { DataTarget } from '../agent/designTools';
 import { videoTools, compactVideo } from '../agent/videoTools';
-import { useVideo, videoSnapshot } from './store';
+import { useVideo, videoSnapshot, frameGrab } from './store';
 import { useApp } from '../store/app';
 import { deepClone } from '../lib/util';
 import type { MediaItem, VideoData } from '../model/types';
@@ -13,6 +13,8 @@ export function videoHost(): ComposerHost {
   const fr = useApp.getState().lang === 'fr';
   return {
     kind: 'video',
+    snapshot: () => frameGrab.fn?.() ?? Promise.resolve(null),
+    snapshotLabel: fr ? 'l’image de la vidéo sous la tête de lecture' : 'the video frame under the playhead',
     suggestions: fr
       ? ['Passe la vidéo en 9:16 pour TikTok et recadre les clips', 'Ajoute un titre d’accroche de 3 s au début', 'Applique un look chaud et un fondu enchaîné entre les clips', 'Coupe les 2 premières secondes et referme le trou']
       : ['Switch to 9:16 for TikTok and refit the clips', 'Add a 3-second hook title at the start', 'Apply a warm look and crossfades between clips', 'Cut the first 2 seconds and close the gap'],

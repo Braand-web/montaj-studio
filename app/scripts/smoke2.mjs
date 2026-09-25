@@ -8,8 +8,10 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, a
 await ctx.addInitScript(() => {
   const findTool = (opts, n) => (opts.tools || []).find((t) => t.name === n);
   const run = async (opts, n, input) => { const t = findTool(opts, n); if (!t) throw new Error('missing tool ' + n); return await t.execute(input, { signal: new AbortController().signal }); };
+  window.__imgs = [];
   const sample = async (input, opts = {}) => {
     const last = Array.isArray(input) ? input[input.length - 1].content : input;
+    window.__imgs.push((opts.images || []).length);
     let text = 'OK';
     if (findTool(opts, 'create_design') && /affiche|poster/i.test(last)) {
       const r = await run(opts, 'create_design', { title: 'Affiche test', format: 'story' });
@@ -33,11 +35,21 @@ await ctx.addInitScript(() => {
     } else if (!opts.tools) {
       text = 'Texte généré';
     }
+    if (opts.tools) text += '\nSUITE: Ajoute un logo | Change le fond | Décline en story';
     opts.onText?.({ text, delta: text });
     return { text, truncated: false, modelTierApplied: 'default' };
   };
-  sample.limits = async () => ({ maxPromptBytes: 65536, tools: { maxCount: 40 } });
-  sample.json = async (input) => { const m = String(input).match(/\{[\s\S]*\}$/); const o = m ? JSON.parse(m[0]) : {}; for (const k of Object.keys(o)) o[k] = '[EN] ' + o[k]; return o; };
+  sample.limits = async () => ({ maxPromptBytes: 65536, tools: { maxCount: 40 }, images: { maxCount: 5, maxInputBytes: 20e6, mediaTypes: ['image/png', 'image/jpeg'] } });
+  sample.json = async (input, opts = {}) => {
+    const s = String(input);
+    window.__imgs.push((opts.images || []).length);
+    if (/alternative short copies/.test(s)) return ['Accroche A', 'Accroche B', 'Accroche C'];
+    if (/senior graphic designer/.test(s)) return { score: 62, summary: 'Bonne base, titre trop petit.', issues: [{ sev: 'high', text: 'Titre trop petit', fix: 'Passe le titre à 140 px' }, { sev: 'low', text: 'Marges inégales', fix: 'Aligne à 80 px' }] };
+    if (/5-color design palette/.test(s)) return { name: 'Coucher de soleil', colors: ['#1B1B3A', '#F5F0E6', '#FF7A59', '#FFC857', '#2EC4B6'], note: 'Fond sombre, accents chauds.' };
+    if (/caption to publish/.test(s)) return { caption: 'Samedi, on lance tout 🚀', hashtags: ['#lancement', 'soirée'] };
+    if (/publishing kit/.test(s)) return { title: 'Trois astuces batterie', description: 'Tout ce qu’il faut savoir.', hashtags: ['#tech'], chapters: [{ t: 0, title: 'Intro' }, { t: 2, title: 'Astuce 1' }] };
+    const m = s.match(/\{[\s\S]*\}$/); const o = m ? JSON.parse(m[0]) : {}; for (const k of Object.keys(o)) o[k] = '[EN] ' + o[k]; return o;
+  };
   const user = { me: async () => ({ id: 'u_test', name: 'Awa Test', avatarUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACwAAAAAAQABAAACAkQBADs=', color: '#0A84FF', email: null, isOwner: true, canEdit: true }) };
   window.claude = { use: async (n) => (n === 'sample' ? sample : n === 'user' ? user : null) };
 });
@@ -71,6 +83,9 @@ await step('design composer (Assist) → proposal → apply', async () => {
   await page.locator('#composer-design').fill('Ajoute un titre');
   await page.keyboard.press('Enter');
   await page.getByText('Proposition prête').waitFor();
+  await page.getByText('image(s) envoyée(s) à Claude').waitFor();
+  await page.getByRole('button', { name: 'Change le fond' }).waitFor();
+  if (await page.getByText('SUITE:').count()) throw new Error('follow-up marker shown');
   await page.getByRole('button', { name: 'Appliquer' }).click();
   await page.locator('.dots [data-id]').nth(1).waitFor();
 });
@@ -78,10 +93,32 @@ await shot('design-agent');
 await step('AI tab: write + translate', async () => {
   await page.locator('.rail button', { hasText: /^IA$/ }).click();
   await page.locator('#ai-write').fill('accroche promo');
-  await page.getByRole('button', { name: /Écrire et ajouter|Remplacer le texte/ }).click();
-  await page.getByText('Texte ajouté').waitFor();
+  await page.getByRole('button', { name: 'Proposer 3 versions' }).click();
+  await page.getByRole('button', { name: 'Accroche B' }).click();
+  await page.getByText('Texte placé').waitFor();
   await page.getByRole('button', { name: 'English' }).click();
   await page.getByText('Page traduite').waitFor();
+});
+await step('AI critique sees the page and hands fixes to the assistant', async () => {
+  await page.getByRole('button', { name: 'Analyser cette page' }).click();
+  await page.getByText('Titre trop petit').first().waitFor();
+  const imgs = await page.evaluate(() => window.__imgs[window.__imgs.length - 1]);
+  if (imgs !== 1) throw new Error('critique sent ' + imgs + ' images');
+  await page.getByRole('button', { name: 'Corriger avec l’assistant' }).click();
+  await page.getByText('Applique ces corrections').waitFor();
+  await page.getByText('Proposition prête').last().waitFor();
+  await page.getByRole('button', { name: 'Refuser' }).click();
+});
+await step('AI palette from a photo + social caption', async () => {
+  await page.locator('.rail button', { hasText: /^IA$/ }).click();
+  const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 60; c.height = 40; const x = c.getContext('2d'); x.fillStyle = '#FF7A59'; x.fillRect(0, 0, 60, 40); return c.toDataURL('image/png').split(',')[1]; });
+  await page.locator('input[type=file][accept="image/png,image/jpeg,image/webp"]').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await page.getByText('Coucher de soleil').waitFor();
+  await page.getByRole('button', { name: 'Ajouter au kit de marque' }).click();
+  await page.getByRole('button', { name: 'Écrire la légende' }).click();
+  await page.locator('textarea').filter({ hasText: 'Samedi, on lance tout' }).waitFor();
+  const v = await page.locator('textarea').filter({ hasText: 'Samedi' }).inputValue();
+  if (!v.includes('#soirée')) throw new Error('hashtags not normalized: ' + v);
 });
 await step('export PNG → notification', async () => {
   await page.getByRole('button', { name: 'Exporter' }).first().click();
@@ -95,6 +132,23 @@ await step('studio chat creates a design', async () => {
   await page.keyboard.press('Enter');
   await page.getByText('J’ai créé l’affiche').waitFor({ timeout: 10000 });
   await page.getByRole('button', { name: 'Ouvrir dans l’éditeur' }).first().waitFor();
+  await page.getByRole('button', { name: 'Décline en story' }).waitFor();
+});
+await step('studio chat: render check sends the design back to Claude', async () => {
+  await page.getByRole('button', { name: 'Vérifier le rendu' }).click();
+  await page.getByText('Vérifie le rendu de').waitFor();
+  await page.getByText('1 image(s) vue(s) par Claude').waitFor();
+});
+await step('studio chat: attach a photo', async () => {
+  const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 40; c.height = 40; c.getContext('2d').fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
+  await page.locator('input[type=file][accept^="image/png"]').last().setInputFiles({ name: 'ma-photo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await page.locator('img[alt="ma-photo.png"]').waitFor();
+  await page.locator('#chat-input').fill('Que vois-tu sur cette photo ?');
+  await page.keyboard.press('Enter');
+  await page.getByText('Que vois-tu sur cette photo').waitFor();
+  await page.waitForTimeout(500);
+  const imgs = await page.evaluate(() => window.__imgs[window.__imgs.length - 1]);
+  if (imgs !== 1) throw new Error('chat sent ' + imgs + ' images');
 });
 await shot('chat');
 await step('studio chat creates a TikTok project', async () => {
@@ -111,6 +165,14 @@ await step('video composer (Agent) adds a title', async () => {
   await page.keyboard.press('Enter');
   await page.getByText(/Terminé — /).waitFor();
   await page.getByRole('button', { name: 'Tout annuler' }).click();
+});
+await step('video publishing kit', async () => {
+  await page.keyboard.press('Escape');
+  await page.locator('.tabs button', { hasText: 'Inspecteur' }).click();
+  await page.getByRole('button', { name: 'Préparer la publication' }).click();
+  await page.locator('textarea').filter({ hasText: 'Trois astuces batterie' }).waitFor();
+  await page.getByRole('button', { name: 'Chapitres → marqueurs' }).click();
+  await page.getByText('Chapitres ajoutés comme marqueurs').waitFor();
 });
 await shot('video');
 await step('notifications panel lists events', async () => {

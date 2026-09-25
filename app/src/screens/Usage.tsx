@@ -15,7 +15,7 @@ export function Usage() {
   useEffect(() => { void useUsage.getState().load(); }, []);
   const src: Record<UsageSource, string> = {
     'composer-design': T('Assistant · design', 'Assistant · design'), 'composer-video': T('Assistant · vidéo', 'Assistant · video'),
-    'studio-chat': 'Studio Chat', 'ai-write': T('Rédaction', 'Writing'), 'ai-translate': T('Traduction', 'Translation'), test: T('Test de connexion', 'Connection test'),
+    'studio-chat': 'Studio Chat', 'ai-write': T('Rédaction', 'Writing'), 'ai-translate': T('Traduction', 'Translation'), 'ai-critique': T('Critique du design', 'Design critique'), 'ai-palette': T('Palette depuis une image', 'Palette from image'), 'ai-caption': T('Légende réseaux', 'Social caption'), 'ai-publish': T('Kit de publication', 'Publishing kit'), test: T('Test de connexion', 'Connection test'),
   };
   const tierL: Record<string, string> = { quick: T('Rapide', 'Fast'), default: T('Équilibré', 'Balanced'), complex: T('Avancé', 'Advanced') };
   const last7 = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (6 - i)); return d; });

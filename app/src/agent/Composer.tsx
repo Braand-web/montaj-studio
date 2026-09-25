@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { ArrowUp, Check, CircleAlert, LoaderCircle, Square } from 'lucide-react';
+import { ArrowUp, Check, CircleAlert, LoaderCircle, Square, Eye, EyeOff, Paperclip, X, ScanEye } from 'lucide-react';
 import { runAgent, type AgentTool, type Step } from './runner';
 import { useApp, useT, type AgentMode, type Tier } from '../store/app';
 import type { Msg } from '../lib/claude';
 import { notify } from '../lib/notify';
+import { aiLimits, splitNext } from '../lib/ai';
+import { importFiles, mediaUrlSync } from '../lib/media';
+import { prefs } from '../lib/db';
+import type { MediaItem } from '../model/types';
 
 // Conversational Composer (SPEC §9.2). Ask = read-only, Assist = works on a copy and waits
 // for Apply/Refuse, Agent = edits directly with Stop and one-step "Undo all".
@@ -21,6 +25,8 @@ export interface RunSession {
 
 export interface ComposerHost {
   kind: 'design' | 'video';
+  snapshot?(): Promise<Blob | null>;
+  snapshotLabel?: string;
   suggestions: string[];
   rules(): string;
   session(mode: AgentMode): RunSession;
@@ -37,6 +43,9 @@ interface Turn {
   mode?: AgentMode;
   session?: RunSession;
   showChanges?: boolean;
+  next?: string[];
+  images?: number;
+  attach?: string[];
 }
 
 export const useAgentRun = create<{ running: boolean; abort: (() => void) | null; set(p: { running: boolean; abort: (() => void) | null }): void }>((set) => ({
@@ -56,6 +65,21 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
   const scrollRef = useRef<HTMLDivElement>(null);
   const running = useAgentRun((s) => s.running);
   const consumed = useRef<string | null>(null);
+  const [maxImages, setMaxImages] = useState(0);
+  const [see, setSee] = useState(() => prefs.get('aiSee', true));
+  const [attach, setAttach] = useState<{ m: MediaItem; blob: Blob }[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { void aiLimits().then((l) => setMaxImages(l.images)); }, []);
+  const toggleSee = () => { const v = !see; setSee(v); prefs.set('aiSee', v); };
+  const onFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const added: { m: MediaItem; blob: Blob }[] = [];
+    for (const f of [...files].filter((x) => x.type.startsWith('image/'))) {
+      const { ok } = await importFiles([f]);
+      if (ok[0]) added.push({ m: ok[0], blob: f });
+    }
+    setAttach((a) => [...a, ...added].slice(0, Math.max(1, maxImages - 1)));
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -72,14 +96,29 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
 
   const patch = (id: number, p: Partial<Turn>) => setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, ...p } : t)));
 
-  async function send(textArg?: string) {
+  async function send(textArg?: string, opts: { visualCheck?: boolean } = {}) {
     const text = (textArg ?? input).trim();
     if (!text || running) return;
     setInput('');
+    // Images: what the user is looking at (optional) + photos they attached (imported as media).
+    const images: Blob[] = [];
+    const notes: string[] = [];
+    if (maxImages && (see || opts.visualCheck) && host.snapshot) {
+      const snap = await host.snapshot();
+      if (snap) { images.push(snap); notes.push(`[Image ${images.length}: ${host.snapshotLabel ?? 'current view'}]`); }
+    }
+    const att = attach;
+    setAttach([]);
+    for (const a of att) {
+      if (images.length >= maxImages) break;
+      images.push(a.blob);
+      notes.push(`[Image ${images.length}: ${lang === 'fr' ? 'photo jointe par l’utilisateur, importée dans la médiathèque' : 'photo attached by the user, imported in the media library'} — media id ${a.m.id}, « ${a.m.name} », ${a.m.w ?? '?'}×${a.m.h ?? '?'} px]`);
+    }
+    const prompt = notes.length ? `${text}\n\n${notes.join('\n')}` : text;
     const history: Msg[] = turns
       .filter((t) => t.text.trim())
       .map((t) => ({ role: t.role, content: t.text }));
-    const userTurn: Turn = { id: ++turnSeq, role: 'user', text, steps: [] };
+    const userTurn: Turn = { id: ++turnSeq, role: 'user', text, steps: [], images: images.length, attach: att.map((a) => a.m.id) };
     const session = host.session(mode);
     const aid = ++turnSeq;
     const aTurn: Turn = { id: aid, role: 'assistant', text: '', steps: [], status: 'thinking', mode, session };
@@ -90,7 +129,8 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
     const res = await runAgent({
       rules: host.rules(),
       history,
-      prompt: text,
+      prompt,
+      images,
       mode,
       tier,
       tools: session.tools,
@@ -98,7 +138,7 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
       fr: lang === 'fr',
       source: host.kind === 'design' ? 'composer-design' : 'composer-video',
       cb: {
-        onText: (t) => patch(aid, { text: t, status: 'running' }),
+        onText: (t) => patch(aid, { text: splitNext(t).body, status: 'running' }),
         onStep: (s) => {
           const i = steps.findIndex((x) => x.id === s.id);
           if (i >= 0) steps[i] = s; else steps.push(s);
@@ -116,7 +156,8 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
     else if (mode === 'agent' && changed) status = 'done';
     else status = 'answer';
     if (status === 'stopped' && mode === 'assist' && changed) status = 'proposal';
-    patch(aid, { text: res.text, status, error: res.error, steps: [...steps] });
+    const { body, next } = splitNext(res.text);
+    patch(aid, { text: body, next, status, error: res.error, steps: [...steps] });
     if (status === 'done' || status === 'proposal') notify({ kind: 'assistant', text: (lang === 'fr' ? (status === 'done' ? 'Assistant : ' + session.changes.length + ' modification(s) appliquée(s)' : 'Assistant : proposition prête à valider') : (status === 'done' ? 'Assistant: ' + session.changes.length + ' change(s) applied' : 'Assistant: proposal ready to review')), to: host.kind === 'design' ? 'design' : 'video' });
   }
 
@@ -148,10 +189,29 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
           </>
         )}
         {turns.map((t, i) => (t.role === 'user'
-          ? <div key={t.id} style={{ alignSelf: 'flex-end', maxWidth: '88%', background: 'var(--panel2)', border: '1px solid var(--line2)', borderRadius: '10px 10px 2px 10px', padding: '8px 10px', fontSize: 12, whiteSpace: 'pre-wrap' }}>{t.text}</div>
-          : <AssistantTurn key={t.id} t={t} last={i === turns.length - 1} onPatch={(p) => patch(t.id, p)} onContinue={() => void send(T('Continue.', 'Continue.'))} />))}
+          ? (
+            <div key={t.id} className="col" style={{ alignSelf: 'flex-end', maxWidth: '88%', gap: 4, alignItems: 'flex-end' }}>
+              {!!t.attach?.length && <div className="row" style={{ gap: 4 }}>{t.attach.map((id) => { const u = mediaUrlSync(id); return u ? <img key={id} src={u} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8 }} /> : null; })}</div>}
+              <div style={{ background: 'var(--panel2)', border: '1px solid var(--line2)', borderRadius: '10px 10px 2px 10px', padding: '8px 10px', fontSize: 12, whiteSpace: 'pre-wrap' }}>{t.text}</div>
+              {!!t.images && <span className="faint row" style={{ fontSize: 10, gap: 4 }}><Eye size={10} />{t.images} {T('image(s) envoyée(s) à Claude', 'image(s) sent to Claude')}</span>}
+            </div>
+          )
+          : <AssistantTurn key={t.id} t={t} last={i === turns.length - 1} onPatch={(p) => patch(t.id, p)} onContinue={() => void send(T('Continue.', 'Continue.'))}
+              onNext={(q) => void send(q)} canLook={!!maxImages && !!host.snapshot}
+              onLook={() => void send(T('Regarde l’image jointe du résultat et corrige les problèmes visibles : texte coupé ou qui déborde, éléments qui se chevauchent, contraste faible, alignements, cadres vides. Si tout est bon, dis-le simplement.', 'Look at the attached image of the result and fix visible problems: cut or overflowing text, overlapping elements, low contrast, alignment, empty frames. If everything is fine, just say so.'), { visualCheck: true })} />))}
       </div>
-      <div style={{ borderTop: '1px solid var(--line)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8, flex: 'none' }}>
+      <div style={{ borderTop: '1px solid var(--line)', padding: 10, display: 'flex', flexDirection: 'column', gap: 8, flex: 'none' }}
+        onDragOver={(e) => { if (maxImages) e.preventDefault(); }} onDrop={(e) => { if (!maxImages) return; e.preventDefault(); void onFiles(e.dataTransfer.files); }}>
+        {attach.length > 0 && (
+          <div className="row wrap" style={{ gap: 6 }}>
+            {attach.map((a) => (
+              <span key={a.m.id} style={{ position: 'relative' }}>
+                <img src={mediaUrlSync(a.m.id) ?? ''} alt={a.m.name} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--line2)' }} />
+                <button className="btn icon" aria-label={T('Retirer', 'Remove')} onClick={() => setAttach((x) => x.filter((y) => y.m.id !== a.m.id))} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, padding: 0 }}><X size={11} /></button>
+              </span>
+            ))}
+          </div>
+        )}
         <textarea
           id={`composer-${host.kind}`}
           className="input"
@@ -169,6 +229,16 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
           <div className="seg">
             {modes.map((m) => <button key={m.id} className={mode === m.id ? 'on' : ''} onClick={() => setApp({ agentMode: m.id })}>{m.label}</button>)}
           </div>
+          {maxImages > 0 && host.snapshot && (
+            <button className={'btn icon' + (see ? ' on-acc' : '')} aria-pressed={see} onClick={toggleSee}
+              title={see ? T('Claude voit ton travail (une image est jointe à chaque demande)', 'Claude sees your work (an image is attached to each request)') : T('Claude ne voit pas ton travail', 'Claude does not see your work')}>{see ? <Eye size={13} /> : <EyeOff size={13} />}</button>
+          )}
+          {maxImages > 1 && (
+            <>
+              <button className="btn icon" onClick={() => fileRef.current?.click()} title={T('Joindre une photo (elle est aussi ajoutée à la médiathèque)', 'Attach a photo (also added to the media library)')}><Paperclip size={13} /></button>
+              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void onFiles(e.target.files); e.target.value = ''; }} />
+            </>
+          )}
           <div className="grow" />
           {running
             ? <button className="btn" onClick={() => useAgentRun.getState().abort?.()} title={T('Arrêter', 'Stop')}><Square size={12} />{T('Stop', 'Stop')}</button>
@@ -180,7 +250,7 @@ export function Composer({ host, autoPrompt }: { host: ComposerHost; autoPrompt?
   );
 }
 
-function AssistantTurn({ t, last, onPatch, onContinue }: { t: Turn; last: boolean; onPatch(p: Partial<Turn>): void; onContinue(): void }) {
+function AssistantTurn({ t, last, onPatch, onContinue, onNext, canLook, onLook }: { t: Turn; last: boolean; onPatch(p: Partial<Turn>): void; onContinue(): void; onNext(q: string): void; canLook: boolean; onLook(): void }) {
   const T = useT();
   const s = t.session;
   const writes = t.steps.filter((x) => x.write);
@@ -232,7 +302,13 @@ function AssistantTurn({ t, last, onPatch, onContinue }: { t: Turn; last: boolea
               : <button className="btn ghost" style={{ height: 28 }} onClick={() => { s?.redoAll?.(); onPatch({ status: 'done' }); }}>{T('Rétablir', 'Redo')}</button>}
             <button className="btn ghost" style={{ height: 28 }} onClick={() => onPatch({ showChanges: !t.showChanges })}>{t.showChanges ? T('Masquer', 'Hide') : T('Voir les changements', 'See changes')}</button>
             {last && <button className="btn ghost" style={{ height: 28 }} onClick={onContinue}>{T('Continuer', 'Continue')}</button>}
+            {last && canLook && t.status === 'done' && <button className="btn ghost" style={{ height: 28 }} onClick={onLook} title={T('Claude regarde le résultat et corrige ce qui cloche', 'Claude looks at the result and fixes what is off')}><ScanEye size={12} />{T('Vérifier visuellement', 'Visual check')}</button>}
           </div>
+        </div>
+      )}
+      {last && !!t.next?.length && !['thinking', 'running'].includes(t.status ?? '') && (
+        <div className="row wrap" style={{ gap: 6 }}>
+          {t.next.map((q) => <button key={q} className="chip wrap-text" style={{ fontSize: 11 }} onClick={() => onNext(q)}>{q}</button>)}
         </div>
       )}
       {t.status === 'refused' && <div className="muted" style={{ fontSize: 12 }}>{T("Proposition refusée. Rien n'a été modifié.", 'Proposal refused. Nothing was changed.')}</div>}

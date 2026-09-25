@@ -34,6 +34,7 @@ Légende : **Fonctionnel** · **Bientôt** (visible et marqué comme tel dans l'
 | Général | Français / anglais, thème auto / sombre / clair, raccourcis (`?`), palette de recherche (⌘K), vue téléphone pour le design |
 | Éditeur design (pro) | Zoom (⌘+/⌘−/⌘0, Ctrl+molette), magnétisme sur les autres éléments, clic droit, 8 formes vectorielles, dégradés (formes et fond de page), ombre portée, cadres photo en forme (cercle, cœur, étoile…), recadrage zoom/position, réglages d'image et préréglages, texte néon, espacement des lettres, italique, retourner, copier/coller le style (⌘⌥C/⌘⌥V), pipette |
 | Éditeur vidéo (pro) | Images clés (position, échelle, rotation, opacité), incrustation fond vert, masques, modes de fusion, arrière-plan flou, image figée, formes d'onde, vignettes sur les clips, clic droit, supprimer et refermer, dupliquer, combler les vides, magnétisme activable, lecture en boucle, image PNG, J/K/L |
+| IA et agents | L'assistant voit la page ou l'image vidéo (image jointe à chaque demande, activable), photos jointes (importées dans la médiathèque et utilisables), vérification visuelle après modification, 3 suggestions de suite après chaque réponse ; critique du design notée avec correction en un clic, 3 variantes de texte, palette depuis une photo, légende réseaux avec hashtags, kit de publication vidéo (titre, description, hashtags, chapitres → marqueurs) ; Studio Chat : photos jointes et « Vérifier le rendu » |
 
 ## Bientôt (nécessite un serveur ou un modèle local non embarqué)
 

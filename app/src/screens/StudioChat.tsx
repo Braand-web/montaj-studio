@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, SquarePen, PanelLeftClose, PanelLeftOpen, PanelRight, ArrowUp, Square, Megaphone, Image as ImageIcon, Clapperboard, Smartphone, Presentation, FileText, Type, Check, CircleAlert, LoaderCircle, Trash2, LayoutGrid, MessageSquare, AtSign } from 'lucide-react';
+import { Sparkles, SquarePen, PanelLeftClose, PanelLeftOpen, PanelRight, ArrowUp, Square, Megaphone, Image as ImageIcon, Clapperboard, Smartphone, Presentation, FileText, Type, Check, CircleAlert, LoaderCircle, Trash2, LayoutGrid, MessageSquare, AtSign, Paperclip, X, ScanEye } from 'lucide-react';
 import { useApp, useT, type Tier } from '../store/app';
 import { get, put } from '../lib/db';
 import { runAgent, type AgentTool, type Step, str, num } from '../agent/runner';
@@ -18,13 +18,17 @@ import { notify } from '../lib/notify';
 import { LogoMark } from '../ui/kit';
 import { uid } from '../lib/util';
 import type { Msg } from '../lib/claude';
+import { aiLimits, splitNext } from '../lib/ai';
+import { importFiles, mediaUrlSync } from '../lib/media';
+import { renderPage, canvasBlob } from '../design/render';
+import type { MediaItem } from '../model/types';
 
 // Studio Chat: a full-page conversation where Claude creates real documents (designs from
 // formats or templates, video projects with titles and captions) with the editors' tools.
 
 type Kind = 'auto' | 'design' | 'video' | 'text';
 interface Card { docId: string; kind: 'design' | 'video'; name: string }
-interface ChatMsg { id: string; role: 'user' | 'assistant'; text: string; steps?: Step[]; cards?: Card[]; status?: 'thinking' | 'running' | 'done' | 'error' | 'stopped'; error?: string }
+interface ChatMsg { id: string; role: 'user' | 'assistant'; text: string; steps?: Step[]; cards?: Card[]; status?: 'thinking' | 'running' | 'done' | 'error' | 'stopped'; error?: string; next?: string[]; imgs?: string[]; seen?: number }
 interface Thread { id: string; title: string; at: number; msgs: ChatMsg[] }
 
 const RATIOS = ['auto', '9:16', '4:5', '1:1', '16:9'] as const;
@@ -51,6 +55,27 @@ export function StudioChat() {
   const ctl = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [maxImages, setMaxImages] = useState(0);
+  const [attach, setAttach] = useState<{ m: MediaItem; blob: Blob }[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { void aiLimits().then((l) => setMaxImages(l.images)); }, []);
+  const onFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const added: { m: MediaItem; blob: Blob }[] = [];
+    for (const f of [...files].filter((x) => x.type.startsWith('image/'))) { const { ok } = await importFiles([f]); if (ok[0]) added.push({ m: ok[0], blob: f }); }
+    setAttach((a) => [...a, ...added].slice(0, Math.max(1, maxImages)));
+  };
+  // Sends a render of a created design back to Claude so it can check and fix its own work.
+  const reviewDoc = async (card: Card) => {
+    const d = await getDoc<DesignData>(card.docId);
+    if (!d) return;
+    const blobs: Blob[] = [];
+    for (const pg of d.data.pages.slice(0, Math.max(1, maxImages))) { try { const b = await canvasBlob(await renderPage(pg, 1024), 'image/jpeg', 0.85); blobs.push(b); } catch { /* skip page */ } }
+    void send(T(`Vérifie le rendu de « ${card.name} » et corrige ce qui ne va pas.`, `Check the render of "${card.name}" and fix what is off.`), {
+      images: blobs,
+      notes: blobs.map((_, i) => `[Image ${i + 1}: render of page ${i + 1} of document ${card.docId} « ${card.name} ». Call open_document("${card.docId}") before editing. Fix cut or overflowing text, overlaps, low contrast, poor alignment or empty areas; if it looks good, say so.]`),
+    });
+  };
 
   useEffect(() => { void get<Thread[]>('kv', 'chats').then((t) => { if (t?.length) { setThreads(t); setActive(t[0].id); } }); }, []);
   const persist = (ts: Thread[]) => { setThreads(ts); void put('kv', 'chats', ts.slice(0, 50)); };
@@ -71,10 +96,20 @@ export function StudioChat() {
 
   const newThread = () => { setActive(null); setInput(''); setView('feed'); inputRef.current?.focus(); };
 
-  async function send(textArg?: string) {
+  async function send(textArg?: string, extra: { images?: Blob[]; notes?: string[] } = {}) {
     const text = (textArg ?? input).trim();
     if (!text || running) return;
     setInput('');
+    const images: Blob[] = [...(extra.images ?? [])].slice(0, maxImages);
+    const notes: string[] = [...(extra.notes ?? [])].slice(0, images.length);
+    const att = attach;
+    setAttach([]);
+    for (const x of att) {
+      if (images.length >= maxImages) break;
+      images.push(x.blob);
+      notes.push(`[Image ${images.length}: photo attached by the user, imported in the media library — media id ${x.m.id}, « ${x.m.name} », ${x.m.w ?? '?'}×${x.m.h ?? '?'} px. Use this id as mediaId to place it in a design image element or as a video clip.]`);
+    }
+    const prompt = notes.length ? `${text}\n\n${notes.join('\n')}` : text;
     let ts = threads;
     let th = thread;
     if (!th) {
@@ -83,7 +118,7 @@ export function StudioChat() {
       setActive(th.id);
     }
     const history: Msg[] = th.msgs.filter((m) => m.text.trim()).map((m) => ({ role: m.role, content: m.text + (m.cards?.length ? `\n[documents créés : ${m.cards.map((c) => `${c.name} (${c.docId})`).join(', ')}]` : '') }));
-    const u: ChatMsg = { id: uid('m'), role: 'user', text };
+    const u: ChatMsg = { id: uid('m'), role: 'user', text, imgs: att.map((x) => x.m.id), seen: images.length };
     const a: ChatMsg = { id: uid('m'), role: 'assistant', text: '', steps: [], cards: [], status: 'thinking' };
     const tid = th.id;
     th = { ...th, at: Date.now(), msgs: [...th.msgs, u, a] };
@@ -203,7 +238,8 @@ export function StudioChat() {
       'You are Studio Chat inside Montaj Studio, a free, local-first design and video suite. You create real documents with the tools; they open in the editors.',
       `Reply in ${lang === 'fr' ? 'French (tutoiement)' : 'English'}. Keep replies short: what you made and what the user can do next.`,
       'For a design: create_design (a format or a template), then add_element / update_element to build a clean layout: big readable headline, supporting text, shapes for structure, contrast at least 4.5:1 (check_design). Coordinates are page pixels, origin top-left.',
-      'For a video: create_video, then add_title and set_captions. You cannot see or hear media; place user media only if they ask and it exists in list_media.',
+      'For a video: create_video, then add_title and set_captions. You cannot hear audio. Place user media when it helps: images attached to the message come with their media id; other media is in list_media.',
+      'Attached images (user photos or renders of documents) are visible to you: describe what matters, match the design to the photo (colors, mood), and put the photo in an image element with its mediaId when the user wants it used.',
       'You cannot generate photos, illustrations, video footage or voices: leave empty photo frames the user can fill, and say so in one line if they asked for generated imagery.',
       `Preferred ratio: ${ratio}. ${kindLine}`,
       `Brand kit "${brand.name}": colors ${brand.colors.join(', ')}; heading font ${brand.fonts.heading}; body font ${brand.fonts.body}; voice: ${brand.tone}`,
@@ -214,16 +250,17 @@ export function StudioChat() {
     const steps: Step[] = [];
     const wrapped = tools.map((t) => ({ ...t, run: (x: Record<string, unknown>) => { const r = t.run(x); if (r instanceof Promise) return r.then(async (v) => { await flush(); return v; }); void flush(); return r; } }));
     const res = await runAgent({
-      rules, history, prompt: text, mode: kind === 'text' ? 'ask' : 'agent', tier, tools: wrapped, signal: c.signal, fr: lang === 'fr', source: 'studio-chat',
+      rules, history, prompt, images, mode: kind === 'text' ? 'ask' : 'agent', tier, tools: wrapped, signal: c.signal, fr: lang === 'fr', source: 'studio-chat',
       cb: {
-        onText: (t) => patchA({ text: t, status: 'running' }),
+        onText: (t) => patchA({ text: splitNext(t).body, status: 'running' }),
         onStep: (s) => { const i = steps.findIndex((x) => x.id === s.id); if (i >= 0) steps[i] = s; else steps.push(s); patchA({ steps: [...steps], status: 'running' }); },
       },
     });
     await flush();
     setRunning(false);
     ctl.current = null;
-    patchA({ text: res.text, status: res.code === 'cancelled' ? 'stopped' : res.error ? 'error' : 'done', error: res.error, steps: [...steps], cards: [...cards] });
+    const { body, next } = splitNext(res.text);
+    patchA({ text: body, next, status: res.code === 'cancelled' ? 'stopped' : res.error ? 'error' : 'done', error: res.error, steps: [...steps], cards: [...cards] });
     if (cards.length) notify({ kind: 'chat', text: T(`Studio Chat a créé ${cards.length} document(s) : ${cards.map((x) => x.name).join(', ')}`, `Studio Chat created ${cards.length} document(s): ${cards.map((x) => x.name).join(', ')}`), to: 'chat' });
   }
 
@@ -301,8 +338,14 @@ export function StudioChat() {
             </div>
           ) : (
             <div className="col" style={{ maxWidth: 680, margin: '0 auto', padding: '28px 24px 16px', gap: 26 }}>
-              {thread.msgs.map((m) => m.role === 'user'
-                ? <div key={m.id} style={{ alignSelf: 'flex-end', maxWidth: '74%', padding: '10px 14px', borderRadius: '20px 20px 6px 20px', background: 'var(--acc)', color: '#fff', fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{m.text}</div>
+              {thread.msgs.map((m, mi) => m.role === 'user'
+                ? (
+                  <div key={m.id} className="col" style={{ alignSelf: 'flex-end', maxWidth: '74%', gap: 6, alignItems: 'flex-end' }}>
+                    {!!m.imgs?.length && <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>{m.imgs.map((id) => { const u = mediaUrlSync(id); return u ? <img key={id} src={u} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 14 }} /> : null; })}</div>}
+                    <div style={{ padding: '10px 14px', borderRadius: '20px 20px 6px 20px', background: 'var(--acc)', color: '#fff', fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                    {!!m.seen && <span className="faint" style={{ fontSize: 11 }}>{m.seen} {T('image(s) vue(s) par Claude', 'image(s) seen by Claude')}</span>}
+                  </div>
+                )
                 : (
                   <div key={m.id} className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
                     <div style={{ width: 30, height: 30, borderRadius: 15, flex: 'none', background: 'linear-gradient(135deg,#0A84FF,#BF5AF2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Sparkles size={14} color="#fff" /></div>
@@ -326,6 +369,14 @@ export function StudioChat() {
                           {m.cards.map((c) => <LiveCard key={c.docId} card={c} onOpen={() => go(c.kind === 'video' ? 'video' : 'design', c.docId)} />)}
                         </div>
                       )}
+                      {mi === thread.msgs.length - 1 && m.status === 'done' && !running && (
+                        <div className="row wrap" style={{ gap: 6 }}>
+                          {maxImages > 0 && m.cards?.filter((c) => c.kind === 'design').slice(0, 1).map((c) => (
+                            <button key={c.docId} className="chip" onClick={() => void reviewDoc(c)} title={T('Claude regarde le rendu et corrige ses erreurs', 'Claude looks at the render and fixes its mistakes')}><ScanEye size={12} />{T('Vérifier le rendu', 'Check the render')}</button>
+                          ))}
+                          {m.next?.map((q) => <button key={q} className="chip wrap-text" onClick={() => void send(q)}>{q}</button>)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -334,7 +385,18 @@ export function StudioChat() {
         </div>
         <div className="row" style={{ padding: '0 24px 20px', justifyContent: 'center' }}>
           <div style={{ width: '100%', maxWidth: 680, borderRadius: 26, padding: 1, background: 'linear-gradient(135deg, rgba(10,132,255,.85), rgba(191,90,242,.45) 40%, var(--line2) 75%)', boxShadow: '0 20px 50px rgba(0,0,0,.18)' }}>
-            <div className="col" style={{ borderRadius: 25, background: 'var(--panel)', padding: '14px 14px 10px 18px', gap: 10 }}>
+            <div className="col" style={{ borderRadius: 25, background: 'var(--panel)', padding: '14px 14px 10px 18px', gap: 10 }}
+              onDragOver={(e) => { if (maxImages) e.preventDefault(); }} onDrop={(e) => { if (!maxImages) return; e.preventDefault(); void onFiles(e.dataTransfer.files); }}>
+              {attach.length > 0 && (
+                <div className="row wrap" style={{ gap: 8 }}>
+                  {attach.map((x) => (
+                    <span key={x.m.id} style={{ position: 'relative' }}>
+                      <img src={mediaUrlSync(x.m.id) ?? ''} alt={x.m.name} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--line2)' }} />
+                      <button className="btn icon" aria-label={T('Retirer', 'Remove')} onClick={() => setAttach((a) => a.filter((y) => y.m.id !== x.m.id))} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, padding: 0 }}><X size={11} /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <textarea ref={inputRef} id="chat-input" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} rows={2}
                 placeholder={T('Décris ce que tu veux créer… (Maj+Entrée pour aller à la ligne)', 'Describe what you want to create… (Shift+Enter for a new line)')}
                 style={{ resize: 'none', border: 0, background: 'transparent', color: 'var(--tx)', outline: 'none', fontSize: 15, lineHeight: 1.45, padding: 0 }} />
@@ -342,6 +404,12 @@ export function StudioChat() {
                 <div className="row" style={{ padding: 2, borderRadius: 16, background: 'var(--panel2)', gap: 2 }}>
                   {kinds.map((k) => <button key={k.id} onClick={() => setKind(k.id)} className="row" style={{ height: 28, padding: '0 10px', borderRadius: 14, border: 0, background: kind === k.id ? 'var(--acc)' : 'transparent', color: kind === k.id ? '#fff' : 'var(--tx2)', fontSize: 12, fontWeight: 500, gap: 5 }}><k.I size={12} />{k.l}</button>)}
                 </div>
+                {maxImages > 0 && (
+                  <>
+                    <button className="btn icon" style={{ width: 32, height: 32, borderRadius: 16 }} onClick={() => fileRef.current?.click()} title={T('Joindre une photo : Claude la voit et peut l’utiliser dans le design', 'Attach a photo: Claude sees it and can use it in the design')}><Paperclip size={14} /></button>
+                    <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void onFiles(e.target.files); e.target.value = ''; }} />
+                  </>
+                )}
                 <button className="btn" style={{ height: 32, borderRadius: 16 }} onClick={() => setRatio(RATIOS[(RATIOS.indexOf(ratio) + 1) % RATIOS.length])} title={T('Format préféré', 'Preferred ratio')}>{ratio === 'auto' ? T('Format auto', 'Auto ratio') : ratio}</button>
                 <select className="input" value={tier} onChange={(e) => set({ tier: e.target.value as Tier })} style={{ height: 32, borderRadius: 16, fontSize: 12, width: 'auto', background: 'var(--panel2)', border: 0 }}>
                   {tiers.map((x) => <option key={x.id} value={x.id}>Claude · {x.l}</option>)}

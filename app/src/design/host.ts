@@ -5,6 +5,7 @@ import { useApp } from '../store/app';
 import { deepClone } from '../lib/util';
 import type { DesignData, MediaItem } from '../model/types';
 import { FONT_KEYS } from '../model/fonts';
+import { renderPage, canvasBlob } from './render';
 
 let mediaCache: MediaItem[] = [];
 export const setDesignMedia = (m: MediaItem[]) => { mediaCache = m; };
@@ -13,6 +14,9 @@ export function designHost(): ComposerHost {
   const fr = useApp.getState().lang === 'fr';
   return {
     kind: 'design',
+    // Rendered page (proposal included in Assist mode) so Claude sees what the user sees.
+    snapshot: async () => { try { const c = await renderPage(useDesign.getState().page(), 1024); return await canvasBlob(c, 'image/jpeg', 0.85); } catch { return null; } },
+    snapshotLabel: fr ? 'le rendu de la page affichée' : 'a render of the page on screen',
     suggestions: fr
       ? ['Rends les titres plus lisibles et vérifie les contrastes', 'Décline cette page en story 9:16 et en post 4:5', 'Réécris les textes avec un ton plus percutant', 'Applique les couleurs de mon kit de marque']
       : ['Make the headings more readable and check contrast', 'Resize this page to a 9:16 story and a 4:5 post', 'Rewrite the copy with a punchier tone', 'Apply my brand kit colors'],
@@ -25,7 +29,9 @@ export function designHost(): ComposerHost {
         `You are the design assistant inside ${'Montaj Studio'}, a free, local-first design and video editor.`,
         `You edit the user's design document only through the provided tools. Coordinates are page pixels, origin top-left.`,
         `Reply in ${lang === 'fr' ? 'French (tutoiement)' : 'English'}, briefly: what you did, as a short list. Never claim a change you did not make with a tool.`,
-        `Keep text inside the page, keep contrast at least 4.5:1 (use check_design), prefer the brand colors, keep the layout clean and aligned.`,
+        `Work like a senior designer: first decide the layout (margins about 6–8% of the page width, a clear type scale with one dominant headline, aligned edges, breathing room), then make the changes in as few tool calls as possible, then call check_design and fix what it reports.`,
+        `Keep text inside the page, keep contrast at least 4.5:1, prefer the brand colors, keep the layout clean and aligned. Pro tools you can use: gradients (grad), drop shadows (dropShadow), shaped photo frames (mask), crop, neon text, vector shapes (type shape).`,
+        `If an image is attached, it shows what the user sees: use it to judge balance, readability and overlaps; photos attached by the user come with a media id you can place.`,
         `Image elements need a media id from list_media; if none fits, leave an empty frame and say so. You cannot generate images.`,
         `Available fonts: ${FONT_KEYS.join(', ')}.`,
         `Brand kit "${brand.name}": colors ${brand.colors.join(', ')}; heading font ${brand.fonts.heading}; body font ${brand.fonts.body}; voice: ${brand.tone}`,

@@ -141,8 +141,8 @@ await step('studio chat: render check sends the design back to Claude', async ()
 });
 await step('studio chat: attach a photo', async () => {
   const png = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 40; c.height = 40; c.getContext('2d').fillRect(0, 0, 40, 40); return c.toDataURL('image/png').split(',')[1]; });
-  await page.locator('input[type=file][accept^="image/png"]').last().setInputFiles({ name: 'ma-photo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
-  await page.locator('img[alt="ma-photo.png"]').waitFor();
+  await page.locator('input[type=file][multiple]').last().setInputFiles({ name: 'ma-photo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await page.locator('.att-chip[data-status="ready"]', { hasText: 'ma-photo.png' }).waitFor();
   await page.locator('#chat-input').fill('Que vois-tu sur cette photo ?');
   await page.keyboard.press('Enter');
   await page.getByText('Que vois-tu sur cette photo').waitFor();

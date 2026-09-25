@@ -1,0 +1,9 @@
+node_modules
+dist
+.wrangler
+server/public/index.html
+.dev.vars
+cloudflare/
+smoke*.log
+site-marketing-*
+app/scripts/shot*.png

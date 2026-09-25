@@ -1,0 +1,25 @@
+{
+  "name": "montaj-studio-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:app": "npm --prefix ../app run build && mkdir -p public && cp ../app/dist/montaj-studio.html public/index.html",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "deploy": "npm run build:app && wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir .wrangler/dry"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@cloudflare/puppeteer": "^1.4.0",
+    "fflate": "^0.8.3",
+    "unpdf": "^1.8.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260925.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "wrangler": "^4.140.0"
+  }
+}

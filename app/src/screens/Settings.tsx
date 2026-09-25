@@ -1,3 +1,4 @@
+import { accessCode } from '../lib/attach/backend';
 import { useEffect, useState } from 'react';
 import { Settings as Cog, User, ShieldCheck, Bell, Database, Scale } from 'lucide-react';
 import { useIdentity } from '../lib/identity';
@@ -109,6 +110,17 @@ export function Settings() {
           <span style={{ fontWeight: 600 }}>{T('Où sont tes données', 'Where your data lives')}</span>
           <span className="muted pretty" style={{ fontSize: 13 }}>{T('Tout est stocké dans ce navigateur, sur cet appareil. Toute personne ayant accès à ce navigateur y a accès : sur un ordinateur partagé, efface tes données avant de partir (onglet Données).', 'Everything is stored in this browser, on this device. Anyone with access to this browser can see it: on a shared computer, erase your data before leaving (Data tab).')}</span>
           <div className="row"><button className="btn" onClick={() => useApp.getState().go('legal')}>{T('Confidentialité et conditions', 'Privacy and terms')}</button></div>
+          {!window.claude && (
+            <>
+              <div style={{ height: 1, background: 'var(--line)' }} />
+              <span style={{ fontWeight: 600 }}>{T('Code d’accès du serveur', 'Server access code')}</span>
+              <span className="muted pretty" style={{ fontSize: 13 }}>{T('Si le propriétaire du serveur Montaj a défini un code (ACCESS_CODE), saisis-le ici pour utiliser l’IA, les pièces jointes et l’analyse de liens. Il reste dans ce navigateur.', 'If the Montaj server owner set a code (ACCESS_CODE), enter it here to use AI, attachments and link analysis. It stays in this browser.')}</span>
+              <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); const v = (new FormData(e.currentTarget).get('code') as string).trim(); accessCode.set(v); notify(v ? T('Code enregistré. Recharge la page pour l’appliquer partout.', 'Code saved. Reload the page to apply it everywhere.') : T('Code effacé.', 'Code cleared.')); }}>
+                <input name="code" type="password" className="input" defaultValue={accessCode.get()} autoComplete="off" style={{ maxWidth: 260 }} aria-label={T('Code d’accès', 'Access code')} />
+                <button className="btn" type="submit">{T('Enregistrer', 'Save')}</button>
+              </form>
+            </>
+          )}
         </div>
       )}
       {tab === 'notifs' && (

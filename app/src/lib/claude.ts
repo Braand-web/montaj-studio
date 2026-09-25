@@ -2,6 +2,9 @@
 // account (`sample`) and hands files to the viewer (`downloads`). Both are optional:
 // outside claude.ai, `window.claude` is missing and every feature degrades.
 
+import { backend } from './attach/backend';
+import { serverSample } from './claudeServer';
+
 export interface SampleTool {
   name: string;
   description: string;
@@ -15,6 +18,7 @@ export interface SampleOptions {
   modelTier?: 'quick' | 'default' | 'complex';
   cache?: boolean;
   images?: Blob[];
+  documents?: string[]; // server only: ids of uploaded PDFs Claude reads natively (ignored by claude.ai)
 }
 export type Msg = { role: 'user' | 'assistant'; content: string };
 export interface SampleFn {
@@ -31,11 +35,13 @@ declare global {
 let sampleP: Promise<SampleFn | null> | null = null;
 let dlP: Promise<Downloads | null> | null = null;
 
+// Inside claude.ai: the viewer's own Claude account. Hosted on Cloudflare: the Montaj server
+// (owner's API key) through the same interface. Elsewhere: no AI.
 export function getSample(): Promise<SampleFn | null> {
   if (!sampleP) {
     sampleP = window.claude?.use
       ? (window.claude.use('sample') as Promise<SampleFn | null>).catch(() => null)
-      : Promise.resolve(null);
+      : backend().then((b) => (b.ai ? serverSample() : null));
   }
   return sampleP;
 }

@@ -43,6 +43,7 @@ export async function runAgent(opts: {
   cb: RunCallbacks;
   source: UsageSource;
   images?: Blob[];
+  documents?: string[];
 }): Promise<RunResult> {
   if (overBudget()) {
     return { text: '', code: 'budget', error: opts.fr ? 'Limite quotidienne de requêtes atteinte. Modifie-la dans Utilisation IA.' : 'Daily request limit reached. Change it in AI usage.' };
@@ -110,6 +111,7 @@ export async function runAgent(opts: {
       tools: sampleTools.length ? sampleTools : undefined,
       modelTier: opts.tier,
       images: images.length ? images : undefined,
+      documents: opts.documents?.length ? opts.documents : undefined,
       cache: sampleTools.length ? undefined : false,
       onText: ({ text }) => opts.cb.onText(text),
     });

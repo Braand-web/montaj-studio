@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, SquarePen, PanelLeftClose, PanelLeftOpen, PanelRight, ArrowUp, Square, Megaphone, Image as ImageIcon, Clapperboard, Smartphone, Presentation, FileText, Type, Check, CircleAlert, LoaderCircle, Trash2, LayoutGrid, MessageSquare, AtSign, Paperclip, X, ScanEye } from 'lucide-react';
+import { Sparkles, SquarePen, PanelLeftClose, PanelLeftOpen, PanelRight, ArrowUp, Square, Megaphone, Image as ImageIcon, Clapperboard, Smartphone, Presentation, FileText, Type, Check, CircleAlert, LoaderCircle, Trash2, LayoutGrid, MessageSquare, AtSign, Paperclip, ScanEye } from 'lucide-react';
 import { useApp, useT, type Tier } from '../store/app';
 import { get, put } from '../lib/db';
 import { runAgent, type AgentTool, type Step, str, num } from '../agent/runner';
@@ -19,17 +19,24 @@ import { LogoMark } from '../ui/kit';
 import { uid } from '../lib/util';
 import type { Msg } from '../lib/claude';
 import { aiLimits, splitNext } from '../lib/ai';
-import { importFiles, mediaUrlSync } from '../lib/media';
+import { mediaUrlSync } from '../lib/media';
 import { renderPage, canvasBlob } from '../design/render';
-import type { MediaItem } from '../model/types';
+import { processFile, visionStore, type Attachment } from '../lib/attach/process';
+import { detectUrls, hostOf, previewLink, analyzeLink, linkContext, wantsCrawl, type LinkInfo } from '../lib/attach/links';
+import { ACCEPT, LIMITS } from '../lib/attach/extract';
+import { backend } from '../lib/attach/backend';
+import { mediaBlob } from '../lib/media';
+import { AttachmentChip, LinkCard } from './ChatAttachments';
 
 // Studio Chat: a full-page conversation where Claude creates real documents (designs from
 // formats or templates, video projects with titles and captions) with the editors' tools.
 
 type Kind = 'auto' | 'design' | 'video' | 'text';
 interface Card { docId: string; kind: 'design' | 'video'; name: string }
-interface ChatMsg { id: string; role: 'user' | 'assistant'; text: string; steps?: Step[]; cards?: Card[]; status?: 'thinking' | 'running' | 'done' | 'error' | 'stopped'; error?: string; next?: string[]; imgs?: string[]; seen?: number }
-interface Thread { id: string; title: string; at: number; msgs: ChatMsg[] }
+interface LinkMeta { url: string; host: string; status: LinkInfo['status']; title?: string; description?: string; favicon?: string; image?: string; error?: string }
+interface ChatMsg { id: string; role: 'user' | 'assistant'; text: string; steps?: Step[]; cards?: Card[]; status?: 'thinking' | 'running' | 'done' | 'error' | 'stopped'; error?: string; next?: string[]; imgs?: string[]; seen?: number; files?: string[]; links?: LinkMeta[] }
+// Attachments stay with the conversation (without their blobs) so later messages can refer to them.
+interface Thread { id: string; title: string; at: number; msgs: ChatMsg[]; files?: Attachment[] }
 
 const RATIOS = ['auto', '9:16', '4:5', '1:1', '16:9'] as const;
 
@@ -49,22 +56,92 @@ export function StudioChat() {
   const [ratio, setRatio] = useState<(typeof RATIOS)[number]>('auto');
   const [rail, setRail] = useState(() => window.innerWidth > 900);
   const [side, setSide] = useState(() => window.innerWidth > 1200);
-  const [sideTab, setSideTab] = useState<'jobs' | 'els'>('jobs');
+  const [sideTab, setSideTab] = useState<'jobs' | 'els' | 'files'>('jobs');
   const [view, setView] = useState<'feed' | 'gallery'>('feed');
   const [running, setRunning] = useState(false);
   const ctl = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [maxImages, setMaxImages] = useState(0);
-  const [attach, setAttach] = useState<{ m: MediaItem; blob: Blob }[]>([]);
+  const [pending, setPending] = useState<Attachment[]>([]);
+  const pendingCtl = useRef(new Map<string, AbortController>());
+  const [links, setLinks] = useState<LinkInfo[]>([]);
+  const [ignored, setIgnored] = useState<string[]>([]);
+  const [dropHint, setDropHint] = useState(false);
+  const [serverOn, setServerOn] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { void aiLimits().then((l) => setMaxImages(l.images)); }, []);
-  const onFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
-    const added: { m: MediaItem; blob: Blob }[] = [];
-    for (const f of [...files].filter((x) => x.type.startsWith('image/'))) { const { ok } = await importFiles([f]); if (ok[0]) added.push({ m: ok[0], blob: f }); }
-    setAttach((a) => [...a, ...added].slice(0, Math.max(1, maxImages)));
+  useEffect(() => { void aiLimits().then((l) => setMaxImages(l.images)); void backend().then((b) => setServerOn(b.ok)); }, []);
+  const busyFiles = pending.some((a) => a.status === 'uploading' || a.status === 'processing');
+  const onFiles = async (files: FileList | File[] | null) => {
+    if (!files) return;
+    const list = [...files];
+    if (!list.length) return;
+    const room = LIMITS.perMessage - pending.length;
+    if (room <= 0) { useApp.getState().notify(T(`${LIMITS.perMessage} fichiers maximum par message.`, `${LIMITS.perMessage} files max per message.`), 'err'); return; }
+    if (list.length > room) useApp.getState().notify(T(`Seuls les ${room} premiers fichiers sont joints (${LIMITS.perMessage} par message).`, `Only the first ${room} files are attached (${LIMITS.perMessage} per message).`), 'info');
+    const base = (thread?.files?.length ?? 0) + pending.length;
+    await Promise.all(list.slice(0, room).map((f, i) => {
+      const c = new AbortController();
+      let firstId = '';
+      return processFile(f, base + i + 1, (a) => {
+        if (!firstId) { firstId = a.id; pendingCtl.current.set(a.id, c); }
+        setPending((cur) => (cur.some((x) => x.id === a.id) ? cur.map((x) => (x.id === a.id ? a : x)) : [...cur, a]));
+      }, c.signal);
+    }));
   };
+  const removePending = (id: string) => { pendingCtl.current.get(id)?.abort(); pendingCtl.current.delete(id); visionStore.delete(id); setPending((cur) => cur.filter((x) => x.id !== id)); };
+  // Links typed in the composer get a preview card (title, favicon, image) when the server can fetch them.
+  useEffect(() => {
+    const urls = detectUrls(input).filter((u) => !ignored.includes(u));
+    setLinks((cur) => urls.map((u) => cur.find((l) => l.url === u) ?? { url: u, host: hostOf(u), status: 'pending' }));
+    const ctl = new AbortController();
+    const t = setTimeout(() => {
+      for (const u of urls) void previewLink(u, ctl.signal).then((p) => setLinks((cur) => cur.map((l) => (l.url === u && l.status === 'pending' ? { ...l, ...p, status: p.status ?? 'pending' } : l))));
+    }, 500);
+    return () => { clearTimeout(t); ctl.abort(); };
+  }, [input, ignored]);
+  // What the AI receives about the conversation's attachments: a numbered list, extracted text
+  // (new or referenced files in full, older ones as excerpts), images to look at (new first),
+  // and uploaded PDFs that Claude reads natively on the server.
+  async function buildContext(all: Attachment[], fresh: Set<string>, text: string, analyzed: LinkInfo[]) {
+    const notes: string[] = [];
+    const images: Blob[] = [];
+    const documents: string[] = [];
+    const lower = text.toLowerCase();
+    const refd = (f: Attachment) => fresh.has(f.id) || lower.includes('#' + f.n) || lower.includes(f.name.toLowerCase().replace(/\.[a-z0-9]+$/, '')) || /tout à l'heure|tout a l'heure|précédent|plus haut|earlier|previous|above|same image|même image/.test(lower);
+    const ready = all.filter((f) => f.status === 'ready');
+    if (ready.length) {
+      let budget = LIMITS.textChars;
+      const lines = ['[Attachments of this conversation — the user may refer to them by #number or name]'];
+      for (const f of [...ready].reverse()) {
+        let line = `#${f.n} « ${f.name} » — ${f.summary}${fresh.has(f.id) ? ' (sent with this message)' : ''}`;
+        const pdfNative = serverOn && f.kind === 'pdf' && f.remoteId && (fresh.has(f.id) || refd(f));
+        if (pdfNative) { documents.push(f.remoteId!); line += ' — the full PDF is attached as a document.'; }
+        else if (f.text) {
+          const want = refd(f) ? budget : Math.min(1500, budget);
+          if (want > 200) { const t = f.text.slice(0, want); budget -= t.length; line += `\n<<<${f.kind === 'video' ? 'transcript' : 'content'} of #${f.n}\n${t}${f.text.length > t.length ? '\n…(excerpt)' : ''}\n>>>`; }
+        }
+        lines.push(line);
+      }
+      notes.push(lines.join('\n'));
+      // Vision: new attachments first, then referenced, then the most recent older ones.
+      const order = [...ready.filter((f) => fresh.has(f.id)), ...ready.filter((f) => !fresh.has(f.id) && refd(f)).reverse(), ...ready.filter((f) => !fresh.has(f.id) && !refd(f)).reverse()];
+      const labels: string[] = [];
+      for (const f of order) {
+        let vis = visionStore.get(f.id);
+        if (!vis?.length && (f.kind === 'image') && f.mediaId) { const b = await mediaBlob(f.mediaId); if (b) { vis = [{ label: `#${f.n} ${f.name}`, blob: b }]; visionStore.set(f.id, vis); } }
+        for (const v of vis ?? []) { if (images.length >= maxImages) break; images.push(v.blob); labels.push(`[Image ${images.length}: ${v.label}]`); }
+      }
+      if (labels.length) notes.push(labels.join('\n'));
+      if (!maxImages && ready.some((f) => ['image', 'svg', 'video'].includes(f.kind) || (f.kind === 'pdf' && /scann/.test(f.summary)))) notes.push('[This view cannot send images to the model: work from the text descriptions above and tell the user you could not see the images.]');
+    }
+    analyzed.forEach((l, i) => {
+      notes.push(linkContext(l, i + 1));
+      if (l.shot && images.length < maxImages) { images.push(l.shot); notes.push(`[Image ${images.length}: screenshot of link ${i + 1} ${l.host}]`); }
+    });
+    return { notes, images, documents };
+  }
+
   // Sends a render of a created design back to Claude so it can check and fix its own work.
   const reviewDoc = async (card: Card) => {
     const d = await getDoc<DesignData>(card.docId);
@@ -97,31 +174,27 @@ export function StudioChat() {
   const newThread = () => { setActive(null); setInput(''); setView('feed'); inputRef.current?.focus(); };
 
   async function send(textArg?: string, extra: { images?: Blob[]; notes?: string[] } = {}) {
-    const text = (textArg ?? input).trim();
+    const text = (textArg ?? input).trim() || (!textArg && pending.some((x) => x.status === 'ready') ? T('Voici mes pièces jointes : analyse-les et dis-moi ce que tu peux en faire.', 'Here are my attachments: analyze them and tell me what you can make from them.') : '');
     if (!text || running) return;
+    if (!textArg && busyFiles) { useApp.getState().notify(T('Attends la fin du traitement des pièces jointes.', 'Wait for the attachments to finish processing.'), 'info'); return; }
     setInput('');
-    const images: Blob[] = [...(extra.images ?? [])].slice(0, maxImages);
-    const notes: string[] = [...(extra.notes ?? [])].slice(0, images.length);
-    const att = attach;
-    setAttach([]);
-    for (const x of att) {
-      if (images.length >= maxImages) break;
-      images.push(x.blob);
-      notes.push(`[Image ${images.length}: photo attached by the user, imported in the media library — media id ${x.m.id}, « ${x.m.name} », ${x.m.w ?? '?'}×${x.m.h ?? '?'} px. Use this id as mediaId to place it in a design image element or as a video clip.]`);
-    }
-    const prompt = notes.length ? `${text}\n\n${notes.join('\n')}` : text;
+    const fresh = textArg ? [] : pending.filter((x) => x.status === 'ready');
+    if (!textArg) { setPending([]); pendingCtl.current.clear(); }
+    const urls = detectUrls(text).filter((u) => !ignored.includes(u));
+    setLinks([]); setIgnored([]);
     let ts = threads;
     let th = thread;
     if (!th) {
-      th = { id: uid('t'), title: text.slice(0, 60), at: Date.now(), msgs: [] };
+      th = { id: uid('t'), title: text.slice(0, 60), at: Date.now(), msgs: [], files: [] };
       ts = [th, ...ts];
       setActive(th.id);
     }
-    const history: Msg[] = th.msgs.filter((m) => m.text.trim()).map((m) => ({ role: m.role, content: m.text + (m.cards?.length ? `\n[documents créés : ${m.cards.map((c) => `${c.name} (${c.docId})`).join(', ')}]` : '') }));
-    const u: ChatMsg = { id: uid('m'), role: 'user', text, imgs: att.map((x) => x.m.id), seen: images.length };
+    const allFiles = [...(th.files ?? []), ...fresh];
+    const history: Msg[] = th.msgs.filter((m) => m.text.trim()).map((m) => ({ role: m.role, content: m.text + (m.files?.length ? `\n[pièces jointes : ${m.files.map((id) => { const f = allFiles.find((x) => x.id === id); return f ? `#${f.n} ${f.name}` : ''; }).filter(Boolean).join(', ')}]` : '') + (m.cards?.length ? `\n[documents créés : ${m.cards.map((c) => `${c.name} (${c.docId})`).join(', ')}]` : '') }));
+    const u: ChatMsg = { id: uid('m'), role: 'user', text, files: fresh.map((x) => x.id), links: urls.map((x) => ({ url: x, host: hostOf(x), status: 'analyzing' })) };
     const a: ChatMsg = { id: uid('m'), role: 'assistant', text: '', steps: [], cards: [], status: 'thinking' };
     const tid = th.id;
-    th = { ...th, at: Date.now(), msgs: [...th.msgs, u, a] };
+    th = { ...th, at: Date.now(), msgs: [...th.msgs, u, a], files: allFiles };
     ts = [th, ...ts.filter((x) => x.id !== tid)];
     persist(ts);
     const patchA = (p: Partial<ChatMsg>) => setThreads((cur) => {
@@ -129,6 +202,25 @@ export function StudioChat() {
       void put('kv', 'chats', next.slice(0, 50));
       return next;
     });
+    const patchU = (p: Partial<ChatMsg>) => setThreads((cur) => {
+      const next = cur.map((x) => (x.id === tid ? { ...x, msgs: x.msgs.map((m) => (m.id === u.id ? { ...m, ...p } : m)) } : x));
+      void put('kv', 'chats', next.slice(0, 50));
+      return next;
+    });
+
+    // Links: analyzed on the server (headless browser, SSRF-safe); failures are told to the AI.
+    const analyzed: LinkInfo[] = [];
+    if (urls.length) {
+      const crawl = wantsCrawl(text) ? 4 : 0;
+      const res = await Promise.all(urls.map((x) => analyzeLink(x, crawl)));
+      analyzed.push(...res);
+      patchU({ links: res.map((l) => ({ url: l.url, host: l.host, status: l.status, title: l.title, description: l.description, favicon: l.favicon, image: l.image, error: l.error })) });
+    }
+    const ctx = await buildContext(allFiles, new Set(fresh.map((x) => x.id)), text, analyzed);
+    const images: Blob[] = [...(extra.images ?? []), ...ctx.images].slice(0, maxImages);
+    const notes: string[] = [...(extra.notes ?? []).slice(0, (extra.images ?? []).length), ...ctx.notes];
+    const prompt = notes.length ? `${text}\n\n${notes.join('\n\n')}` : text;
+    patchU({ seen: images.length });
 
     // Documents created during this run, edited in memory, saved as they change.
     const created = new Map<string, Doc>();
@@ -239,7 +331,14 @@ export function StudioChat() {
       `Reply in ${lang === 'fr' ? 'French (tutoiement)' : 'English'}. Keep replies short: what you made and what the user can do next.`,
       'For a design: create_design (a format or a template), then add_element / update_element to build a clean layout: big readable headline, supporting text, shapes for structure, contrast at least 4.5:1 (check_design). Coordinates are page pixels, origin top-left.',
       'For a video: create_video, then add_title and set_captions. You cannot hear audio. Place user media when it helps: images attached to the message come with their media id; other media is in list_media.',
-      'Attached images (user photos or renders of documents) are visible to you: describe what matters, match the design to the photo (colors, mood), and put the photo in an image element with its mediaId when the user wants it used.',
+      'Attachments (images, video key frames and transcripts, documents, archives) and analyzed links come with the message. Use them to create what the user needs:',
+      '- screenshot or mockup → take inspiration from it or reproduce its layout faithfully with the tools;',
+      '- video → understand its content, style and pacing from the key frames and transcript; video attachments have a media id you can place in a video project;',
+      '- PDF / brief / spreadsheet → extract the deliverables, texts, figures and constraints, and build them;',
+      '- logo or brand guidelines → apply the colors, fonts and style; place the logo (image element with its mediaId) when relevant;',
+      '- a link "in the style of" → reuse the structure and visual mood (colors, type, spacing), but write original text and never copy protected content, photos or brand logos from the site; a link "use the info from" → integrate its facts;',
+      '- if an attachment or a link could not be read, say so plainly and ask the user to paste the content or send a screenshot. Never invent what a file or page contains.',
+      'Images attached by the user come with their media id: use it as mediaId to place them in a design image element or as a video clip.',
       'You cannot generate photos, illustrations, video footage or voices: leave empty photo frames the user can fill, and say so in one line if they asked for generated imagery.',
       `Preferred ratio: ${ratio}. ${kindLine}`,
       `Brand kit "${brand.name}": colors ${brand.colors.join(', ')}; heading font ${brand.fonts.heading}; body font ${brand.fonts.body}; voice: ${brand.tone}`,
@@ -250,7 +349,7 @@ export function StudioChat() {
     const steps: Step[] = [];
     const wrapped = tools.map((t) => ({ ...t, run: (x: Record<string, unknown>) => { const r = t.run(x); if (r instanceof Promise) return r.then(async (v) => { await flush(); return v; }); void flush(); return r; } }));
     const res = await runAgent({
-      rules, history, prompt, images, mode: kind === 'text' ? 'ask' : 'agent', tier, tools: wrapped, signal: c.signal, fr: lang === 'fr', source: 'studio-chat',
+      rules, history, prompt, images, documents: ctx.documents, mode: kind === 'text' ? 'ask' : 'agent', tier, tools: wrapped, signal: c.signal, fr: lang === 'fr', source: 'studio-chat',
       cb: {
         onText: (t) => patchA({ text: splitNext(t).body, status: 'running' }),
         onStep: (s) => { const i = steps.findIndex((x) => x.id === s.id); if (i >= 0) steps[i] = s; else steps.push(s); patchA({ steps: [...steps], status: 'running' }); },
@@ -293,8 +392,8 @@ export function StudioChat() {
             ))}
           </div>
           <div className="col" style={{ borderRadius: 14, background: 'var(--panel2)', padding: 12, gap: 6, fontSize: 12, color: 'var(--tx2)' }}>
-            <span className="row" style={{ gap: 6, color: 'var(--tx)', fontWeight: 500 }}><Sparkles size={13} />{T('Ton compte Claude', 'Your Claude account')}</span>
-            <span className="pretty">{T('Studio Chat utilise ton forfait Claude. Aucun crédit ni clé à gérer ici.', 'Studio Chat uses your Claude plan. No credits or keys to manage here.')}</span>
+            <span className="row" style={{ gap: 6, color: 'var(--tx)', fontWeight: 500 }}><Sparkles size={13} />{serverOn ? T('Serveur Montaj', 'Montaj server') : T('Ton compte Claude', 'Your Claude account')}</span>
+            <span className="pretty">{serverOn ? T('Studio Chat passe par le serveur Montaj (clé API du propriétaire). Fichiers : 20 Mo, vidéos : 100 Mo, 10 par message.', 'Studio Chat goes through the Montaj server (owner’s API key). Files: 20 MB, videos: 100 MB, 10 per message.') : T('Studio Chat utilise ton forfait Claude. Fichiers : 20 Mo, vidéos : 100 Mo, 10 par message.', 'Studio Chat uses your Claude plan. Files: 20 MB, videos: 100 MB, 10 per message.')}</span>
             <button className="btn bare" style={{ padding: 0, height: 'auto', color: 'var(--accTx)', alignSelf: 'flex-start' }} onClick={() => go('usage')}>{T('Voir l’utilisation', 'See usage')}</button>
           </div>
         </aside>
@@ -342,6 +441,8 @@ export function StudioChat() {
                 ? (
                   <div key={m.id} className="col" style={{ alignSelf: 'flex-end', maxWidth: '74%', gap: 6, alignItems: 'flex-end' }}>
                     {!!m.imgs?.length && <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>{m.imgs.map((id) => { const u = mediaUrlSync(id); return u ? <img key={id} src={u} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 14 }} /> : null; })}</div>}
+                    {!!m.files?.length && <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>{m.files.map((id) => { const f = thread.files?.find((x) => x.id === id); return f ? <AttachmentChip key={id} a={f} compact /> : null; })}</div>}
+                    {!!m.links?.length && <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>{m.links.map((l) => <LinkCard key={l.url} l={l} />)}</div>}
                     <div style={{ padding: '10px 14px', borderRadius: '20px 20px 6px 20px', background: 'var(--acc)', color: '#fff', fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{m.text}</div>
                     {!!m.seen && <span className="faint" style={{ fontSize: 11 }}>{m.seen} {T('image(s) vue(s) par Claude', 'image(s) seen by Claude')}</span>}
                   </div>
@@ -385,31 +486,31 @@ export function StudioChat() {
         </div>
         <div className="row" style={{ padding: '0 24px 20px', justifyContent: 'center' }}>
           <div style={{ width: '100%', maxWidth: 680, borderRadius: 26, padding: 1, background: 'linear-gradient(135deg, rgba(10,132,255,.85), rgba(191,90,242,.45) 40%, var(--line2) 75%)', boxShadow: '0 20px 50px rgba(0,0,0,.18)' }}>
-            <div className="col" style={{ borderRadius: 25, background: 'var(--panel)', padding: '14px 14px 10px 18px', gap: 10 }}
-              onDragOver={(e) => { if (maxImages) e.preventDefault(); }} onDrop={(e) => { if (!maxImages) return; e.preventDefault(); void onFiles(e.dataTransfer.files); }}>
-              {attach.length > 0 && (
+            <div className="col" style={{ position: 'relative', borderRadius: 25, background: 'var(--panel)', padding: '14px 14px 10px 18px', gap: 10 }}
+              onDragOver={(e) => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); setDropHint(true); } }}
+              onDragLeave={(e) => { if (e.currentTarget === e.target) setDropHint(false); }}
+              onDrop={(e) => { e.preventDefault(); setDropHint(false); void onFiles(e.dataTransfer.files); }}>
+              {dropHint && <div className="drop-hint">{T('Dépose tes fichiers ici', 'Drop your files here')}</div>}
+              {(pending.length > 0 || links.length > 0) && (
                 <div className="row wrap" style={{ gap: 8 }}>
-                  {attach.map((x) => (
-                    <span key={x.m.id} style={{ position: 'relative' }}>
-                      <img src={mediaUrlSync(x.m.id) ?? ''} alt={x.m.name} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--line2)' }} />
-                      <button className="btn icon" aria-label={T('Retirer', 'Remove')} onClick={() => setAttach((a) => a.filter((y) => y.m.id !== x.m.id))} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, padding: 0 }}><X size={11} /></button>
-                    </span>
-                  ))}
+                  {pending.map((x) => <AttachmentChip key={x.id} a={x} onRemove={() => removePending(x.id)} />)}
+                  {links.map((l) => <LinkCard key={l.url} l={serverOn ? l : { ...l, status: 'error', error: 'unavailable' }} onRemove={() => setIgnored((g) => [...g, l.url])} />)}
                 </div>
               )}
-              <textarea ref={inputRef} id="chat-input" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} rows={2}
+              {pending.some((x) => ['image', 'svg', 'video'].includes(x.kind)) && maxImages === 0 && (
+                <span className="warn pretty" style={{ fontSize: 11 }}>{T('Cette vue ne peut pas envoyer d’images à Claude : seules les descriptions et le texte extrait seront utilisés. Ouvre l’app depuis claude.ai ou sur le serveur Montaj pour l’analyse visuelle.', 'This view cannot send images to Claude: only descriptions and extracted text will be used. Open the app from claude.ai or on the Montaj server for visual analysis.')}</span>
+              )}
+              <textarea ref={inputRef} id="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
+                onPaste={(e) => { const fs = [...(e.clipboardData?.files ?? [])]; if (fs.length) { e.preventDefault(); void onFiles(fs); } }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} rows={2}
                 placeholder={T('Décris ce que tu veux créer… (Maj+Entrée pour aller à la ligne)', 'Describe what you want to create… (Shift+Enter for a new line)')}
                 style={{ resize: 'none', border: 0, background: 'transparent', color: 'var(--tx)', outline: 'none', fontSize: 15, lineHeight: 1.45, padding: 0 }} />
               <div className="row wrap" style={{ gap: 6 }}>
                 <div className="row" style={{ padding: 2, borderRadius: 16, background: 'var(--panel2)', gap: 2 }}>
                   {kinds.map((k) => <button key={k.id} onClick={() => setKind(k.id)} className="row" style={{ height: 28, padding: '0 10px', borderRadius: 14, border: 0, background: kind === k.id ? 'var(--acc)' : 'transparent', color: kind === k.id ? '#fff' : 'var(--tx2)', fontSize: 12, fontWeight: 500, gap: 5 }}><k.I size={12} />{k.l}</button>)}
                 </div>
-                {maxImages > 0 && (
-                  <>
-                    <button className="btn icon" style={{ width: 32, height: 32, borderRadius: 16 }} onClick={() => fileRef.current?.click()} title={T('Joindre une photo : Claude la voit et peut l’utiliser dans le design', 'Attach a photo: Claude sees it and can use it in the design')}><Paperclip size={14} /></button>
-                    <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void onFiles(e.target.files); e.target.value = ''; }} />
-                  </>
-                )}
+                <button className="btn icon" style={{ width: 32, height: 32, borderRadius: 16 }} onClick={() => fileRef.current?.click()} aria-label={T('Joindre des fichiers', 'Attach files')}
+                  title={T('Joindre : images, vidéos (100 Mo max), PDF, Word, Excel, CSV, texte, code, ZIP (20 Mo max). Tu peux aussi glisser-déposer ou coller une image.', 'Attach: images, videos (100 MB max), PDF, Word, Excel, CSV, text, code, ZIP (20 MB max). You can also drag and drop or paste an image.')}><Paperclip size={14} /></button>
+                <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { void onFiles(e.target.files ? [...e.target.files] : null); e.target.value = ''; }} />
                 <button className="btn" style={{ height: 32, borderRadius: 16 }} onClick={() => setRatio(RATIOS[(RATIOS.indexOf(ratio) + 1) % RATIOS.length])} title={T('Format préféré', 'Preferred ratio')}>{ratio === 'auto' ? T('Format auto', 'Auto ratio') : ratio}</button>
                 <select className="input" value={tier} onChange={(e) => set({ tier: e.target.value as Tier })} style={{ height: 32, borderRadius: 16, fontSize: 12, width: 'auto', background: 'var(--panel2)', border: 0 }}>
                   {tiers.map((x) => <option key={x.id} value={x.id}>Claude · {x.l}</option>)}
@@ -417,7 +518,7 @@ export function StudioChat() {
                 <div className="grow" />
                 {running
                   ? <button onClick={() => ctl.current?.abort()} title={T('Arrêter', 'Stop')} style={{ width: 38, height: 38, borderRadius: 19, border: 0, background: 'var(--panel2)', color: 'var(--tx)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Square size={14} /></button>
-                  : <button onClick={() => void send()} title={T('Envoyer', 'Send')} disabled={!input.trim()} style={{ width: 38, height: 38, borderRadius: 19, border: 0, background: input.trim() ? 'var(--acc)' : 'var(--line2)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ArrowUp size={17} /></button>}
+                  : <button onClick={() => void send()} title={busyFiles ? T('Traitement des pièces jointes…', 'Processing attachments…') : T('Envoyer', 'Send')} disabled={busyFiles || (!input.trim() && !pending.some((x) => x.status === 'ready'))} style={{ width: 38, height: 38, borderRadius: 19, border: 0, background: !busyFiles && (input.trim() || pending.some((x) => x.status === 'ready')) ? 'var(--acc)' : 'var(--line2)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ArrowUp size={17} /></button>}
               </div>
             </div>
           </div>
@@ -427,10 +528,20 @@ export function StudioChat() {
         <aside className="col" style={{ borderLeft: '1px solid var(--line)', background: 'var(--panel)', minHeight: 0 }}>
           <div style={{ padding: 12, borderBottom: '1px solid var(--line)' }}>
             <div className="row" style={{ padding: 3, borderRadius: 12, background: 'var(--panel2)', gap: 2 }}>
-              {(['jobs', 'els'] as const).map((k) => <button key={k} onClick={() => setSideTab(k)} className="btn grow" style={{ height: 28, background: sideTab === k ? 'var(--panel)' : 'transparent', boxShadow: sideTab === k ? '0 1px 3px rgba(0,0,0,.2)' : 'none' }}>{k === 'jobs' ? T('Tâches', 'Jobs') : T('Éléments', 'Elements')}</button>)}
+              {(['jobs', 'files', 'els'] as const).map((k) => <button key={k} onClick={() => setSideTab(k)} className="btn grow" style={{ height: 28, background: sideTab === k ? 'var(--panel)' : 'transparent', boxShadow: sideTab === k ? '0 1px 3px rgba(0,0,0,.2)' : 'none' }}>{k === 'jobs' ? T('Tâches', 'Jobs') : k === 'files' ? `${T('Fichiers', 'Files')}${thread?.files?.length ? ` ${thread.files.length}` : ''}` : T('Éléments', 'Elements')}</button>)}
             </div>
           </div>
-          {sideTab === 'jobs' ? (
+          {sideTab === 'files' ? (
+            <div className="col" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, gap: 8 }}>
+              <span className="muted pretty" style={{ fontSize: 12 }}>{T('Pièces jointes de cette conversation. Claude s’en souvient : cite-les par leur numéro (« comme sur #2 ») ou « l’image de tout à l’heure ».', 'Attachments of this conversation. Claude remembers them: refer to them by number (“like #2”) or “the image from earlier”.')}</span>
+              {(thread?.files ?? []).map((f) => (
+                <button key={f.id} className="btn bare" style={{ height: 'auto', padding: 0, justifyContent: 'flex-start' }} onClick={() => setInput((v) => (v ? v + ' ' : '') + `#${f.n}`)} title={T('Citer dans le message', 'Mention in the message')}>
+                  <AttachmentChip a={f} />
+                </button>
+              ))}
+              {!thread?.files?.length && <div className="faint pretty" style={{ padding: '30px 12px', textAlign: 'center', fontSize: 12 }}>{T('Aucun fichier. Joins des images, vidéos, PDF, documents ou un ZIP avec le trombone, par glisser-déposer ou en collant une image.', 'No files. Attach images, videos, PDFs, documents or a ZIP with the paperclip, by drag and drop or by pasting an image.')}</div>}
+            </div>
+          ) : sideTab === 'jobs' ? (
             <>
               <div className="col" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 10, gap: 4 }}>
                 {allSteps.map((s) => (

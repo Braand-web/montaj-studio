@@ -37,6 +37,16 @@ name = "RL"
 namespace_id = "1001"
 simple = { limit = 60, period = 60 }
 
+# Send the root domain and www host through this Worker. DNS records for both
+# names are already proxied through Cloudflare.
+[[routes]]
+pattern = "montajstudio.fun/*"
+zone_name = "montajstudio.fun"
+
+[[routes]]
+pattern = "www.montajstudio.fun/*"
+zone_name = "montajstudio.fun"
+
 # Secrets (never in this file):
 #   npx wrangler secret put ANTHROPIC_API_KEY
 #   npx wrangler secret put ACCESS_CODE            (optional: locks the AI and uploads behind a code)

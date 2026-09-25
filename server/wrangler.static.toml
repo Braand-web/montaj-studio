@@ -1,0 +1,13 @@
+name = "montaj-studio"
+compatibility_date = "2026-09-01"
+
+[assets]
+directory = "./public"
+
+[[routes]]
+pattern = "montajstudio.fun/*"
+zone_name = "montajstudio.fun"
+
+[[routes]]
+pattern = "www.montajstudio.fun/*"
+zone_name = "montajstudio.fun"

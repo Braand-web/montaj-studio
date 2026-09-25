@@ -32,7 +32,7 @@ export function Usage() {
   return (
     <div className="page screen-in" style={{ maxWidth: 1100 }}>
       <PageHead color="#64D2FF" icon={<ChartNoAxesColumn size={19} />} title={T('Utilisation IA', 'AI usage')} sub={T('Chaque requête envoyée à Claude depuis cet appareil. Elles sont décomptées de ton forfait Claude, pas facturées par Montaj.', 'Every request sent to Claude from this device. They count against your Claude plan, not billed by Montaj.')} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+      <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
         {[
           [T('Aujourd’hui', 'Today'), String(today), limit ? T(`sur ${limit} autorisées`, `of ${limit} allowed`) : T('sans limite', 'no limit'), '#0A84FF'],
           [T('Total', 'Total'), String(rows.length), T(`${ok} réussies`, `${ok} succeeded`), '#30D158'],
@@ -44,7 +44,7 @@ export function Usage() {
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16 }}>
+      <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 16 }}>
         <div className="card col" style={{ padding: 16, gap: 12 }}>
           <span className="eyebrow">{T('7 derniers jours', 'Last 7 days')}</span>
           <div className="row" style={{ alignItems: 'flex-end', gap: 8, height: 120 }}>

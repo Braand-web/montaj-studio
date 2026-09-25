@@ -24,7 +24,7 @@ export function Templates() {
       <PageHead color="#FF9F0A" icon={<LayoutTemplate size={19} />} title={T('Modèles', 'Templates')} sub={T('Des points de départ originaux, entièrement modifiables. Les cadres photo sont vides : dépose tes propres images.', 'Original starting points, fully editable. Photo frames are empty: drop your own images.')}
         right={<div className="row" style={{ position: 'relative' }}><Search size={14} style={{ position: 'absolute', left: 11, color: 'var(--tx3)' }} /><input id="tpl-search" className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={T('Rechercher un modèle', 'Search templates')} style={{ width: 260, height: 38, paddingLeft: 34, borderRadius: 999 }} /></div>} />
       <div className="row wrap" style={{ gap: 6 }}>{cats.map((c) => <button key={c.id} className={'chip' + (cat === c.id ? ' on' : '')} onClick={() => setCat(c.id)}>{c.l}</button>)}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
+      <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
         {shown.map((t) => {
           const d = previews.get(t.id)!;
           const p = d.pages[0];

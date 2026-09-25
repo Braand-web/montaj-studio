@@ -134,18 +134,32 @@ await step('feedback: post, vote, reply, admin status', async () => {
 await shot('feedback');
 await step('usage log has rows', async () => { await side('Utilisation IA'); await page.getByText('Studio Chat').nth(1).waitFor(); await page.getByText('Assistant · design').first().waitFor(); });
 await step('templates: video template opens the video editor', async () => { await side('Templates'); await page.getByRole('button', { name: 'Vidéo', exact: true }).click(); await page.getByRole('button', { name: 'Utiliser' }).first().click(); await page.locator('section div[title="Titre"]').first().waitFor(); });
-await step('templates: 20+ available', async () => { await page.getByTitle('Aller à… (⌘K)').click(); await page.locator('#palette-q').fill('templates'); await page.keyboard.press('Enter'); const n = await page.getByRole('button', { name: 'Utiliser' }).count(); if (n < 20) throw new Error('only ' + n); });
+await step('templates: 20+ available', async () => { await page.getByTitle('Aller à… (⌘K)').click(); await page.locator('#palette-q').fill('templates'); await page.keyboard.press('Enter'); await page.getByRole('button', { name: 'Utiliser' }).nth(19).waitFor(); const n = await page.getByRole('button', { name: 'Utiliser' }).count(); if (n < 20) throw new Error('only ' + n); });
 await step('settings tabs', async () => { await side('Paramètres'); for (const t of ['Sécurité', 'Notifications', 'Données', 'Profil']) await page.getByRole('button', { name: t, exact: true }).click(); });
 await step('legal tabs', async () => { await page.getByRole('button', { name: 'Données', exact: true }).click(); await page.getByRole('button', { name: 'Consulter' }).click(); for (const t of ['Confidentialité', 'IA et données', 'Licences']) await page.getByRole('button', { name: t }).click(); await page.getByText('SIL Open Font License').waitFor(); });
-await step('credits: no fake purchase', async () => { await side('Crédits'); const n = await page.getByRole('button', { name: 'Bientôt' }).count(); if (n < 2) throw new Error('expected disabled paid plans'); });
+await step('credits: no fake purchase', async () => { await side('Crédits'); await page.getByRole('button', { name: 'Bientôt' }).nth(1).waitFor(); const n = await page.getByRole('button', { name: 'Bientôt' }).count(); if (n < 2) throw new Error('expected disabled paid plans'); });
 await step('providers: Claude connected', async () => { await side('Fournisseurs IA'); await page.getByText('Connecté · outils actifs').waitFor(); });
 await page.setViewportSize({ width: 390, height: 844 });
 await step('phone width: home renders without horizontal scroll', async () => {
-  await side('Accueil').catch(() => page.locator('.btn', { hasText: 'Accueil' }).first().click());
+  await page.locator('.tabbar .tab', { hasText: 'Accueil' }).click();
+  await page.getByText('on crée quoi aujourd’hui').waitFor();
   const sw = await page.evaluate(() => document.documentElement.scrollWidth);
   if (sw > 400) throw new Error('scrollWidth ' + sw);
 });
 await shot('phone');
+await step('phone: drawer opens and navigates', async () => {
+  await page.locator('.tabbar .tab', { hasText: 'Plus' }).click();
+  await page.locator('.drawer .nav-item', { hasText: 'Kit de marque' }).click();
+  await page.locator('.drawer').waitFor({ state: 'detached' });
+  await page.getByRole('heading', { name: 'Kit de marque' }).waitFor();
+});
+await step('browser back returns to previous screen', async () => {
+  await page.goBack(); await page.getByText('on crée quoi aujourd’hui').waitFor();
+  await page.goForward(); await page.getByRole('heading', { name: 'Kit de marque' }).waitFor();
+  if (!(await page.evaluate(() => location.hash)).startsWith('#/brand')) throw new Error('hash ' + (await page.evaluate(() => location.hash)));
+});
+await step('deep link after reload', async () => { await page.reload({ waitUntil: 'domcontentloaded' }); await page.getByRole('heading', { name: 'Kit de marque' }).waitFor(); });
+await shot('phone-brand');
 console.log(`\n${ok} OK, ${fail} FAIL`);
 console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
 await browser.close();

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { House, Images, LayoutTemplate, Table2, CalendarDays, Palette, KeyRound, Trash2, Settings, Search, Clapperboard, Image as ImageIcon, Sparkles, CreditCard, Lightbulb, Users, ChartNoAxesColumn, Shield, Bell, PenTool, Film, ChevronsUpDown, MessageSquare } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { House, Images, LayoutTemplate, Table2, CalendarDays, Palette, KeyRound, Trash2, Settings, Search, Clapperboard, Image as ImageIcon, Sparkles, CreditCard, Lightbulb, Users, ChartNoAxesColumn, Shield, Bell, PenTool, Film, ChevronsUpDown, MessageSquare, Menu, X } from 'lucide-react';
 import { useApp, useT, type Screen } from '../store/app';
 import { listDocs, onDocsChange, createDoc } from '../lib/docs';
 import type { DocMeta, DesignData } from '../model/types';
@@ -99,24 +99,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const note = (n: NavItem) => n.id === 'trash' && trashed ? String(trashed) : n.id === 'credits' ? T('Gratuit', 'Free') : n.id === 'providers' ? '1/9' : n.id === 'feedback' && !fbSeen ? T('Nouveau', 'New') : '';
   const displayName = userName || id.name;
 
-  if (narrow) {
-    return (
-      <div style={{ display: 'grid', gridTemplateRows: '52px minmax(0,1fr)', height: '100%' }}>
-        <div className="row" style={{ gap: 6, padding: '0 12px', borderBottom: '1px solid var(--line)', background: 'var(--panel)', overflowX: 'auto' }}>
-          <span className="logo-btn" style={{ width: 28, height: 28 }}><LogoMark size={12} /></span>
-          <button className="btn" style={{ height: 32, position: 'relative' }} onClick={() => useNotifs.getState().setOpen(true)} aria-label="Notifications"><Bell size={14} />{unread > 0 && <span className="mono" style={{ fontSize: 10, color: '#FF453A' }}>{unread}</span>}</button>
-          {nav.map((n) => (
-            <button key={n.id} onClick={() => goNav(n.id)} className="btn" style={{ height: 32, background: screen === n.id ? 'var(--panel2)' : 'transparent', color: screen === n.id ? 'var(--tx)' : 'var(--tx2)' }}>{T(n.fr, n.en)}</button>
-          ))}
-        </div>
-        <main style={{ minWidth: 0, overflow: 'auto' }}>{children}</main>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '252px minmax(0,1fr)', height: '100%' }}>
-      <aside style={{ borderRight: '1px solid var(--line)', background: 'var(--panel)', display: 'flex', flexDirection: 'column', padding: '14px 10px', gap: 16, minHeight: 0, overflow: 'auto' }}>
+  const navRef = useRef<HTMLElement>(null);
+  const [ind, setInd] = useState({ y: 0, h: 0 });
+  // Sliding highlight behind the active sidebar item.
+  useLayoutEffect(() => {
+    const el = navRef.current?.querySelector<HTMLElement>('[data-on]');
+    const n = el ? { y: el.offsetTop, h: el.offsetHeight } : { y: 0, h: 0 };
+    setInd((o) => (o.y === n.y && o.h === n.h ? o : n));
+  });
+  const side = (
+    <>
         <div className="col" style={{ gap: 10 }}>
           <button onClick={() => go('team')} className="row" style={{ gap: 10, padding: 6, border: 0, borderRadius: 16, background: 'transparent', textAlign: 'left' }}>
             <span className="logo-btn" style={{ width: 30, height: 30, borderRadius: 10 }}><LogoMark /></span>
@@ -131,12 +123,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
             {unread > 0 && <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#FF453A', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unread}</span>}
           </button>
         </div>
-        <nav className="col" style={{ gap: 2 }}>
+        <nav ref={navRef} className="col" style={{ gap: 2, position: 'relative' }}>
+          <span className="nav-ind" style={{ transform: `translateY(${ind.y}px)`, height: ind.h, opacity: ind.h ? 1 : 0 }} />
           {nav.map((n) => {
             const on = screen === n.id || (n.id === 'open-video' && screen === 'video') || (n.id === 'open-design' && screen === 'design');
             const nt = note(n);
             return (
-              <button key={n.id} onClick={() => goNav(n.id)} className="row" style={{ justifyContent: 'space-between', height: 34, padding: '0 10px', border: 0, borderRadius: 10, background: on ? 'var(--panel2)' : 'transparent', color: on ? 'var(--tx)' : 'var(--tx2)', fontSize: 13, fontWeight: 500, textAlign: 'left' }}>
+              <button key={n.id} data-on={on || undefined} onClick={() => goNav(n.id)} className="row nav-item" style={{ justifyContent: 'space-between', height: 34, padding: '0 10px', border: 0, borderRadius: 10, background: 'transparent', position: 'relative', zIndex: 1, color: on ? 'var(--tx)' : 'var(--tx2)', fontSize: 13, fontWeight: 500, textAlign: 'left' }}>
                 <span className="row" style={{ gap: 10 }}>
                   <span style={{ width: 24, height: 24, borderRadius: 7, background: n.c, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.25)' }}><n.I size={13} color="#fff" /></span>
                   {T(n.fr, n.en)}
@@ -192,8 +185,52 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <button className="btn" style={{ height: 28, width: 26, padding: 0 }} onClick={() => set({ kbOpen: true })} title={T('Raccourcis', 'Shortcuts')}>?</button>
           </div>
         </div>
+    </>
+  );
+
+  const mainRef = useRef<HTMLElement>(null);
+  // Each screen starts at the top instead of inheriting the previous screen's scroll position.
+  useLayoutEffect(() => { mainRef.current?.scrollTo({ top: 0 }); setDrawer(false); }, [screen]);
+  const [drawer, setDrawer] = useState(false);
+
+  if (narrow) {
+    const tabs: NavItem[] = ['home', 'chat', 'open-video', 'open-design'].map((k) => NAV.find((n) => n.id === k)!);
+    const isOn = (n: NavItem) => screen === n.id || (n.id === 'open-video' && screen === 'video') || (n.id === 'open-design' && screen === 'design');
+    const current = nav.find(isOn);
+    return (
+      <div style={{ display: 'grid', gridTemplateRows: '52px minmax(0,1fr) auto', height: '100%' }}>
+        <div className="row" style={{ gap: 8, padding: '0 10px', borderBottom: '1px solid var(--line)', background: 'var(--panel)' }}>
+          <button className="btn bare icon press" style={{ width: 36, height: 36 }} onClick={() => setDrawer(true)} aria-label={T('Menu', 'Menu')}><Menu size={19} /></button>
+          <span className="logo-btn" style={{ width: 28, height: 28 }}><LogoMark size={12} /></span>
+          <span className="grow ell" style={{ fontWeight: 600, fontSize: 15 }}>{current ? T(current.fr, current.en) : 'Montaj Studio'}</span>
+          <button className="btn bare icon press" style={{ width: 36, height: 36 }} onClick={() => set({ palOpen: true })} aria-label={T('Rechercher', 'Search')}><Search size={17} /></button>
+          <button className="btn bare icon press" style={{ width: 36, height: 36, position: 'relative' }} onClick={() => useNotifs.getState().setOpen(true)} aria-label="Notifications"><Bell size={17} />{unread > 0 && <span style={{ position: 'absolute', top: 5, right: 5, minWidth: 15, height: 15, padding: '0 4px', borderRadius: 8, background: '#FF453A', color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unread}</span>}</button>
+        </div>
+        <main ref={mainRef} style={{ minWidth: 0, overflow: 'auto' }}>{children}</main>
+        <nav className="tabbar" aria-label={T('Navigation principale', 'Main navigation')}>
+          {tabs.map((n) => (
+            <button key={n.id} className={'tab press' + (isOn(n) ? ' on' : '')} onClick={() => goNav(n.id)}><n.I size={19} /><span>{{ home: T('Accueil', 'Home'), chat: 'Chat', 'open-video': T('Vidéo', 'Video'), 'open-design': 'Design' }[n.id as string]}</span></button>
+          ))}
+          <button className={'tab press' + (!tabs.some(isOn) ? ' on' : '')} onClick={() => setDrawer(true)}><Menu size={19} /><span>{T('Plus', 'More')}</span></button>
+        </nav>
+        {drawer && (
+          <div className="drawer-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setDrawer(false); }}>
+            <aside className="drawer">
+              <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn bare icon press" onClick={() => setDrawer(false)} aria-label={T('Fermer', 'Close')}><X size={18} /></button></div>
+              {side}
+            </aside>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '252px minmax(0,1fr)', height: '100%' }}>
+      <aside className="sidebar" style={{ borderRight: '1px solid var(--line)', background: 'var(--panel)', display: 'flex', flexDirection: 'column', padding: '14px 10px', gap: 16, minHeight: 0, overflow: 'auto' }}>
+        {side}
       </aside>
-      <main style={{ minWidth: 0, overflow: 'auto' }}>{children}</main>
+      <main ref={mainRef} style={{ minWidth: 0, overflow: 'auto' }}>{children}</main>
     </div>
   );
 }
@@ -209,7 +246,7 @@ export function NotificationsPanel() {
   const color: Record<string, string> = { export: '#30D158', assistant: '#0A84FF', chat: '#BF5AF2', trash: '#FF453A', version: '#FF9F0A', feedback: '#FFD60A', system: '#8E8E93' };
   return (
     <div onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }} style={{ position: 'fixed', inset: 0, zIndex: 76 }}>
-      <div className="col" style={{ position: 'absolute', left: window.innerWidth < 860 ? 12 : 232, top: window.innerWidth < 860 ? 56 : 100, width: 360, maxWidth: 'calc(100vw - 24px)', maxHeight: '70vh', borderRadius: 20, background: 'var(--panel)', border: '1px solid var(--line2)', boxShadow: '0 30px 80px rgba(0,0,0,.4)', overflow: 'hidden' }}>
+      <div className="col pop" style={{ position: 'absolute', left: window.innerWidth < 860 ? 12 : 232, top: window.innerWidth < 860 ? 56 : 100, width: 360, maxWidth: 'calc(100vw - 24px)', maxHeight: '70vh', borderRadius: 20, background: 'var(--panel)', border: '1px solid var(--line2)', boxShadow: '0 30px 80px rgba(0,0,0,.4)', overflow: 'hidden' }}>
         <div className="row" style={{ gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
           <span className="grow" style={{ fontWeight: 600 }}>Notifications</span>
           <button className="btn bare" style={{ height: 24, padding: 0, color: 'var(--accTx)' }} onClick={() => useNotifs.getState().readAll()}>{T('Tout marquer comme lu', 'Mark all as read')}</button>

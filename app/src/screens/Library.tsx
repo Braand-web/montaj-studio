@@ -70,7 +70,7 @@ export function Library() {
         {filters.map((x) => <button key={x.id} className={'chip' + (f === x.id ? ' on' : '')} onClick={() => setF(x.id)}>{x.l}</button>)}
       </div>
       <div className="row" style={{ gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 420px', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12, outline: drop ? '2px dashed var(--acc)' : undefined, outlineOffset: 6, borderRadius: 10 }}>
+        <div className="stagger" style={{ flex: '1 1 420px', minWidth: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12, outline: drop ? '2px dashed var(--acc)' : undefined, outlineOffset: 6, borderRadius: 10 }}>
           {shown.map((m) => (
             <button key={m.id} onClick={() => setSel(m.id)} className="col" style={{ padding: 0, border: 0, background: 'transparent', gap: 6, textAlign: 'left' }}>
               <div style={{ width: '100%', aspectRatio: '4/3', borderRadius: 10, outline: sel === m.id ? '2px solid var(--acc)' : undefined, outlineOffset: 2, border: '1px solid var(--line)', background: m.thumb ? `url(${m.thumb}) center/cover` : 'var(--panel2)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 6 }}>

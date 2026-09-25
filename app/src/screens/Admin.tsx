@@ -34,7 +34,7 @@ export function Admin() {
   return (
     <div className="page screen-in" style={{ maxWidth: 1300 }}>
       <PageHead color="#FF453A" icon={<Shield size={19} />} title={T('Administration', 'Admin')} sub={T('Contenu, stockage, activité IA et modération de cette installation.', 'Content, storage, AI activity and moderation for this installation.')} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+      <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
         {kpis.map(([I, c, l, v, s]) => (
           <div key={l} className="col" style={{ borderRadius: 18, padding: 16, background: `color-mix(in oklab, ${c} 12%, var(--panel))`, gap: 6 }}>
             <span className="row muted" style={{ gap: 6, fontSize: 12 }}><I size={13} color={c} />{l}</span>

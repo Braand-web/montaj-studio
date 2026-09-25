@@ -111,7 +111,7 @@ export function Home() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>{T('Commencer un format', 'Start a format')}</span>
           <button className="btn bare" onClick={() => setCreateOpen(true)}>{T('Tous les formats', 'All formats')} <ArrowRight size={12} /></button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 10 }}>
+        <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 10 }}>
           {tiles.map((x) => {
             const f = fmt(x.f);
             return (
@@ -132,7 +132,7 @@ export function Home() {
             {q ? T('Aucun document ne correspond.', 'No matching document.') : T('Aucun document pour l’instant. Choisis un format ci-dessus ou décris ce que tu veux créer.', 'No documents yet. Pick a format above or describe what you want to make.')}
           </div>
         )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 16 }}>
+        <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 16 }}>
           {shown.map((d) => (
             <div key={d.id} style={{ position: 'relative' }}>
               <button onClick={async () => { await trashDoc(d.id); notify(T('Déplacé dans la corbeille (restaurable 30 jours).', 'Moved to trash (restorable for 30 days).')); }} title={T('Mettre à la corbeille', 'Move to trash')} style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, width: 28, height: 28, borderRadius: 10, border: 0, background: 'rgba(10,11,13,.55)', color: '#fff', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={12} /></button>

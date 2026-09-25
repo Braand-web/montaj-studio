@@ -72,7 +72,7 @@ export function Providers() {
       </div>
       <div className="col" style={{ gap: 12 }}>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}><span className="h2">{T('Catalogue', 'Catalog')}</span><span className="faint" style={{ fontSize: 12 }}>{T('1 connecté sur', '1 connected of')} {PROVIDERS.length}</span></div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10 }}>
+        <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10 }}>
           {PROVIDERS.map((x) => {
             const on = x.live && status !== 'off' && status !== 'checking';
             return (

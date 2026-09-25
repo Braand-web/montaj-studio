@@ -18,7 +18,7 @@ export function Credits() {
   return (
     <div className="page screen-in" style={{ maxWidth: 1100 }}>
       <PageHead color="#30D158" icon={<CreditCard size={19} />} title={T('Abonnement et crédits', 'Plan and credits')} sub={T('Montaj Studio est gratuit. L’IA utilise ton compte Claude : rien à acheter ici.', 'Montaj Studio is free. AI uses your Claude account: nothing to buy here.')} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
+      <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 16 }}>
         <div className="card col" style={{ padding: 20, gap: 10 }}>
           <span className="faint" style={{ fontSize: 12 }}>{T('Formule actuelle', 'Current plan')}</span>
           <div className="row" style={{ gap: 10 }}><span style={{ fontSize: 22, fontWeight: 700 }}>{T('Gratuit', 'Free')}</span><span className="pill ok">{T('Sans abonnement', 'No subscription')}</span></div>
@@ -41,7 +41,7 @@ export function Credits() {
         </div>
       </div>
       <span className="h2">{T('Formules', 'Plans')}</span>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
+      <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
         {plans.map((p) => (
           <div key={p.id} className="col" style={{ borderRadius: 22, background: `color-mix(in oklab, ${p.c} 12%, var(--panel))`, padding: 20, gap: 12, border: `1px solid ${p.current ? p.c : 'transparent'}` }}>
             <span style={{ width: 36, height: 36, borderRadius: 18, background: p.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p.icon size={17} color="#111113" /></span>

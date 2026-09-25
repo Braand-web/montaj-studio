@@ -246,3 +246,64 @@ input[type=color] { width: 28px; height: 28px; padding: 0; border: 1px solid var
   .site-vis { padding: 24px 8px; min-height: 0; }
   .site-feat { gap: 28px; }
 }
+
+/* ---------- Motion & navigation polish ---------- */
+:root { --ease-out: cubic-bezier(.2,.8,.2,1); --ease-spring: cubic-bezier(.34,1.4,.64,1); }
+
+/* Screen changes: cross-fade + slight rise (View Transitions), sidebar stays still. */
+.sidebar { view-transition-name: sidebar; }
+.tabbar { view-transition-name: tabbar; }
+::view-transition-old(root) { animation: vt-out .16s ease both; }
+::view-transition-new(root) { animation: vt-in .32s var(--ease-out) both; }
+@keyframes vt-out { to { opacity: 0; } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(8px) scale(.995); } }
+@supports (view-transition-name: none) { .screen-in { animation: none; } }
+
+/* Sidebar: sliding highlight behind the active item. */
+.nav-ind { position: absolute; left: 0; right: 0; top: 0; border-radius: 10px; background: var(--panel2); transition: transform .32s var(--ease-spring), height .2s ease, opacity .2s ease; pointer-events: none; }
+.nav-item { color: var(--tx2); transition: color .15s ease; }
+.nav-item[data-on] { color: var(--tx); }
+.nav-item:not([data-on]):hover { background: color-mix(in oklab, var(--panel2) 55%, transparent) !important; }
+.nav-item > span > span:first-child { transition: transform .25s var(--ease-spring); }
+.nav-item:hover > span > span:first-child { transform: scale(1.1) rotate(-4deg); }
+
+/* Press feedback. */
+.ms .btn:not(:disabled):active, .ms .chip:not(:disabled):active, .ms .press:not(:disabled):active, .ms .nav-item:active { transform: scale(.97); }
+.ms .btn, .ms .chip, .ms .press, .ms .nav-item { transition: background-color .15s ease, border-color .15s ease, filter .15s ease, box-shadow .2s ease, transform .12s ease, color .15s ease; }
+
+/* Overlays: fade the backdrop, spring the panel in. */
+.overlay { animation: ov-in .2s ease both; }
+.overlay > .modal, .overlay > div:first-child:not(.modal) { animation: pop-in .28s var(--ease-spring) both; }
+@keyframes ov-in { from { opacity: 0; backdrop-filter: blur(0); } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+.pop { animation: pop-in .26s var(--ease-spring) both; transform-origin: top left; }
+
+/* Lists and grids appear in a short cascade. */
+.stagger > * { animation: st-in .42s var(--ease-out) backwards; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; } .stagger > *:nth-child(2) { animation-delay: 35ms; } .stagger > *:nth-child(3) { animation-delay: 70ms; }
+.stagger > *:nth-child(4) { animation-delay: 105ms; } .stagger > *:nth-child(5) { animation-delay: 140ms; } .stagger > *:nth-child(6) { animation-delay: 175ms; }
+.stagger > *:nth-child(7) { animation-delay: 210ms; } .stagger > *:nth-child(8) { animation-delay: 245ms; } .stagger > *:nth-child(n+9) { animation-delay: 280ms; }
+@keyframes st-in { from { opacity: 0; transform: translateY(10px); } }
+.lift { transition: transform .25s var(--ease-out), box-shadow .25s ease, border-color .2s ease, background-color .2s ease; }
+.lift:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(0,0,0,.18); }
+
+/* Mobile: bottom tab bar + slide-in drawer. */
+.tabbar { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--line); background: color-mix(in oklab, var(--panel) 92%, transparent); backdrop-filter: blur(16px); padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
+.tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 50px; border: 0; border-radius: 12px; background: transparent; color: var(--tx3); font-size: 10px; font-weight: 500; }
+.tab.on { color: var(--accTx); }
+.tab.on svg { animation: tab-bounce .35s var(--ease-spring); }
+@keyframes tab-bounce { 40% { transform: translateY(-3px) scale(1.12); } }
+.drawer-back { position: fixed; inset: 0; z-index: 70; background: var(--overlay); animation: ov-in .2s ease both; }
+.drawer { position: absolute; top: 0; bottom: 0; left: 0; width: min(300px, 86vw); background: var(--panel); border-right: 1px solid var(--line); padding: 10px 10px 20px; display: flex; flex-direction: column; gap: 16px; overflow: auto; animation: drawer-in .3s var(--ease-out) both; box-shadow: 20px 0 60px rgba(0,0,0,.3); }
+@keyframes drawer-in { from { transform: translateX(-100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+  .overlay, .overlay > *, .pop, .stagger > *, .drawer, .drawer-back, .tab.on svg { animation: none !important; }
+  .nav-ind, .lift, .ms .btn, .ms .chip, .ms .press, .ms .nav-item { transition: none !important; }
+  .lift:hover { transform: none; }
+}
+.stagger > button { transition: transform .25s var(--ease-out), box-shadow .25s ease, border-color .2s ease, background-color .2s ease, filter .15s ease; }
+.stagger > button:not(:disabled):hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(0,0,0,.16); }
+.stagger > button:not(:disabled):active { transform: translateY(-1px) scale(.98); }
+@media (prefers-reduced-motion: reduce) { .stagger > button:hover, .stagger > button:active { transform: none; } }

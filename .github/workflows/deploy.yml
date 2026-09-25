@@ -27,6 +27,17 @@ jobs:
           npm test --prefix app
           npm test --prefix server
           npm run typecheck --prefix server
+      - name: Check the deploy secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          missing=0
+          for k in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID ANTHROPIC_API_KEY; do
+            if [ -z "${!k}" ]; then echo "::error::Secret GitHub manquant : $k (Settings → Secrets and variables → Actions)"; missing=1; fi
+          done
+          exit $missing
       - name: Build the app
         run: npm run build:app --prefix server
       - name: Create the R2 bucket if missing

@@ -117,7 +117,7 @@ const fileInput = (page) => page.locator('input[type=file][multiple]').last();
   page.setDefaultTimeout(15000);
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
   const seen = [];
-  await page.route('**/api/health', (r) => r.fulfill({ json: { ok: true, ai: true, upload: true, scrape: true, browser: true, transcribe: true, maxVideoMb: 100, maxFileMb: 20 } }));
+  await page.route('**/api/health', (r) => r.fulfill({ json: { ok: true, ai: true, upload: true, scrape: true, browser: true, transcribe: true, maxVideoMb: 100, maxFileMb: 20, billing: true, payments: { stripe: true, packs: true, mobileMoney: false, plans: { creator: { month: true, year: true }, pro: { month: true, year: true }, team: { month: true, year: true } } } } }));
   await page.route('**/api/transcribe', (r) => r.fulfill({ json: { text: 'Bonjour, voici notre nouvelle collection.' } }));
   await page.route('**/api/scrape', async (r) => {
     const b = r.request().postDataJSON();
@@ -127,11 +127,12 @@ const fileInput = (page) => page.locator('input[type=file][multiple]').last();
   // Claude API mocked: first round calls a tool, second round answers (exercises the loop).
   await page.route('**/api/claude', async (r) => {
     const b = r.request().postDataJSON();
+    b.wallet = r.request().headers()['x-montaj-wallet'];
     seen.push(b);
     const tools = b.tools.map((t) => t.name);
     const hasResult = JSON.stringify(b.messages[b.messages.length - 1]).includes('tool_result');
     const lines = hasResult || !tools.includes('list_formats')
-      ? [{ t: 'd', d: 'J’ai lu le PDF et analysé le lien.' }, { t: 'd', d: '\nSUITE: Crée l’affiche | Autre | Stop' }, { t: 'end', content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }]
+      ? [{ t: 'd', d: 'J’ai lu le PDF et analysé le lien.' }, { t: 'd', d: '\nSUITE: Crée l’affiche | Autre | Stop' }, { t: 'end', content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn', billing: { credits: 12, balance: 4321 } }]
       : [{ t: 'd', d: 'Je regarde les formats…' }, { t: 'end', content: [{ type: 'text', text: 'Je regarde les formats…' }, { type: 'tool_use', id: 'tu_1', name: 'list_formats', input: {} }], stop_reason: 'tool_use' }];
     await r.fulfill({ headers: { 'content-type': 'application/x-ndjson' }, body: lines.map((l) => JSON.stringify(l)).join('\n') + '\n' });
   });
@@ -163,6 +164,29 @@ const fileInput = (page) => page.locator('input[type=file][multiple]').last();
     await page.locator('.link-card', { hasText: 'Échec' }).first().waitFor();
   });
   await page.screenshot({ path: 'scripts/shot3-chat-hosted.png' });
+  await step('B: every AI call carries the device wallet id', async () => {
+    if (!seen.every((b) => /^[a-f0-9-]{36}$/.test(b.wallet ?? ''))) throw new Error('wallet header missing');
+  });
+  await step('B: credits page — real wallet from D1, plans, pack checkout, return toast', async () => {
+    await page.route('**/api/billing/checkout', (r) => r.fulfill({ json: { url: B_URL + '?from=stripe#/credits?checkout=success' } }));
+    await page.goto(B_URL + '#/credits');
+    await page.getByTestId('balance').filter({ hasText: /^\d/ }).waitFor();
+    const bal = Number((await page.getByTestId('balance').innerText()).replace(/\D/g, ''));
+    if (!(bal > 0)) throw new Error('balance ' + bal);
+    await page.locator('[data-plan="pro"] button').filter({ hasText: 'Choisir' }).waitFor();
+    await page.locator('[data-pack="pack_1100"] button').click();
+    await page.waitForURL(/from=stripe/);
+    await page.getByText('Paiement reçu').waitFor();
+    await page.screenshot({ path: 'scripts/shot3-credits.png', fullPage: true });
+  });
+  await step('B: insufficient credits explained in the chat', async () => {
+    await page.unroute('**/api/claude');
+    await page.route('**/api/claude', (r) => r.fulfill({ status: 402, json: { code: 'insufficient_credits', error: 'Crédits insuffisants' } }));
+    await page.evaluate(() => { location.hash = '#/chat'; });
+    await page.locator('#chat-input').fill('Un titre pour mon affiche');
+    await page.keyboard.press('Enter');
+    await page.getByText('recharge ou change de formule').first().waitFor();
+  });
   console.log('B errors:', errors.length ? errors.join(' | ') : 'none');
   await ctx.close();
 }

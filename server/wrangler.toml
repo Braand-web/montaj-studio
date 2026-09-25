@@ -16,6 +16,13 @@ run_worker_first = ["/api/*"]
 binding = "UPLOADS"
 bucket_name = "montaj-studio-uploads"
 
+# Credits, usage ledger and purchases (see migrations/). Moves to Supabase with accounts later.
+[[d1_databases]]
+binding = "DB"
+database_name = "montaj-studio"
+database_id = "c62fd8ff-588a-49b6-af7b-1152a0783f80"
+migrations_dir = "migrations"
+
 # Audio transcription (Whisper) for video attachments.
 [ai]
 binding = "AI"
@@ -32,4 +39,14 @@ simple = { limit = 60, period = 60 }
 
 # Secrets (never in this file):
 #   npx wrangler secret put ANTHROPIC_API_KEY
-#   npx wrangler secret put ACCESS_CODE   (optional: locks the AI and uploads behind a code)
+#   npx wrangler secret put ACCESS_CODE            (optional: locks the AI and uploads behind a code)
+#   npx wrangler secret put STRIPE_SECRET_KEY      (payments; without it the app shows "Paiement bientôt")
+#   npx wrangler secret put STRIPE_WEBHOOK_SECRET  (endpoint: https://<domain>/api/stripe/webhook)
+# Stripe price ids of the monthly / yearly subscriptions (not secret):
+[vars]
+STRIPE_PRICE_CREATOR = ""
+STRIPE_PRICE_PRO = ""
+STRIPE_PRICE_TEAM = ""
+STRIPE_PRICE_CREATOR_YEAR = ""
+STRIPE_PRICE_PRO_YEAR = ""
+STRIPE_PRICE_TEAM_YEAR = ""

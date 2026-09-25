@@ -1,5 +1,6 @@
 import type { Msg, SampleFn, SampleOptions } from './claude';
 import { apiHeaders } from './attach/backend';
+import { useWallet } from './wallet';
 
 // Same contract as the claude.ai `sample` capability, served by the Montaj Worker (/api/claude)
 // with the owner's Anthropic API key. The tool loop runs here, in the page, because the tools
@@ -61,9 +62,10 @@ async function round(body: unknown, signal: AbortSignal | undefined, onDelta: (d
       const line = buf.slice(0, i).trim();
       buf = buf.slice(i + 1);
       if (!line) continue;
-      const ev = JSON.parse(line) as { t: string; d?: string; content?: Block[]; stop_reason?: string; code?: string; error?: string };
+      const ev = JSON.parse(line) as { t: string; d?: string; content?: Block[]; stop_reason?: string; code?: string; error?: string; billing?: { credits: number; balance: number } };
       if (ev.t === 'd' && ev.d) onDelta(ev.d);
-      else if (ev.t === 'end') return { content: ev.content ?? [], stop_reason: ev.stop_reason ?? 'end_turn' };
+      else if (ev.t === 'end' && ev.billing) useWallet.getState().applyCharge(ev.billing.balance);
+      if (ev.t === 'end') return { content: ev.content ?? [], stop_reason: ev.stop_reason ?? 'end_turn' };
       else if (ev.t === 'err') throw new SampleError(ev.code ?? 'upstream_error', ev.error ?? 'error');
     }
   }

@@ -97,6 +97,14 @@ export function sampleErrorText(code: string | undefined, fr: boolean): string {
       return fr ? "Claude n'est pas disponible pour ce compte dans cette vue." : 'Claude is not available for this account in this view.';
     case 'tools_unavailable':
       return fr ? "Cette vue ne permet pas à Claude d'agir sur le document. Le mode Ask reste disponible." : "This view can't let Claude act on the document. Ask mode still works.";
+    case 'insufficient_credits':
+      return fr ? 'Crédits insuffisants : recharge ou change de formule (menu Crédits).' : 'Not enough credits: top up or change plan (Credits menu).';
+    case 'plan_required':
+      return fr ? 'Le modèle Avancé est inclus dans les formules Pro et Équipe. Choisis Équilibré ou change de formule.' : 'The Advanced model comes with the Pro and Team plans. Pick Balanced or upgrade.';
+    case 'daily_cap':
+      return fr ? 'Limite de requêtes IA du jour atteinte pour ta formule. Réessaie demain ou passe à une formule supérieure.' : 'Daily AI request limit reached for your plan. Try again tomorrow or upgrade.';
+    case 'billing_unavailable':
+      return fr ? 'La facturation du serveur n’est pas configurée.' : 'Server billing is not configured.';
     case 'budget':
       return fr ? 'Limite quotidienne de requêtes atteinte. Modifie-la dans Utilisation IA.' : 'Daily request limit reached. Change it in AI usage.';
     case 'rate_limited':

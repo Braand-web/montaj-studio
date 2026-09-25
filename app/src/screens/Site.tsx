@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight, ArrowUp, Check, ChevronDown, ChevronUp, Clapperboard, Download, HardDrive, Image as ImageIcon, Layers, Minus, PenTool, Plus,
   Captions, Send, Shuffle, Sparkles, MessageCircle, Type, Play, Smartphone, Store, Briefcase, Megaphone, GraduationCap, HeartHandshake,
-  Palette, Mic, ShoppingBag, KeyRound, Coins, Sparkle, Undo2, History, Gauge, ShieldCheck, FileDown,
+  Palette, Mic, ShoppingBag, Coins, Sparkle, Undo2, History, Gauge, ShieldCheck, FileDown,
 } from 'lucide-react';
 import { useApp, useT } from '../store/app';
+import { PLANS } from '../lib/pricing';
 import { openEditor } from '../ui/Shell';
 
 // Public marketing page (Montaj Site.dc.html). Every claim here matches what this build really does;
@@ -88,7 +89,7 @@ export function Site() {
     [PenTool, '#FF9F0A', T('Éditeur design', 'Design editor'), T('Posts, affiches, miniatures, cartes, présentations.', 'Posts, posters, thumbnails, cards, decks.'), 'design'],
     [HardDrive, '#30D158', T('Local et privé', 'Local and private'), T('Tes fichiers restent dans ton navigateur.', 'Your files stay in your browser.'), 'local'],
     [Layers, '#0A84FF', T('Création en masse', 'Bulk creation'), T('Un modèle, un CSV, des dizaines de visuels.', 'One template, one CSV, dozens of visuals.'), 'design'],
-    [Coins, '#FF375F', T('Tarifs', 'Pricing'), T('Gratuit aujourd’hui, sans carte bancaire.', 'Free today, no credit card.'), 'tarifs'],
+    [Coins, '#FF375F', T('Tarifs', 'Pricing'), T('Gratuit pour commencer, dès 7,99 € ensuite.', 'Free to start, from €7.99 after.'), 'tarifs'],
   ];
 
   const audiences: [React.ElementType, string][] = [[Play, 'YouTubeurs'], [Smartphone, T('TikTokeurs', 'TikTokers')], [Store, T('Commerçants', 'Shop owners')], [Briefcase, T('Agences', 'Agencies')], [Megaphone, T('Équipes marketing', 'Marketing teams')], [GraduationCap, T('Enseignants', 'Teachers')], [HeartHandshake, T('Associations', 'Non-profits')], [Palette, T('Graphistes', 'Designers')], [Mic, T('Podcasteurs', 'Podcasters')], [ShoppingBag, 'E-commerce']];
@@ -109,18 +110,24 @@ export function Site() {
       points: [T('Projets, médias et versions sont stockés dans ton navigateur', 'Projects, media and versions are stored in your browser'), T('Pas de compte à créer pour commencer', 'No account needed to start'), T('Sauvegarde et restauration en un fichier, depuis les Paramètres', 'One-file backup and restore from Settings')] },
   ];
 
-  const plans = [
-    { I: Sparkle, c: '#AEAEB2', name: T('Gratuit', 'Free'), price: '0 €', per: T('aujourd’hui', 'today'), desc: T('Les deux éditeurs complets, Studio Chat et l’assistant avec Claude.', 'Both full editors, Studio Chat and the Claude assistant.'), feats: [T('Éditeurs vidéo et design sans limite de projets', 'Video and design editors, unlimited projects'), T('Export sans filigrane', 'Watermark-free export'), T('Templates, kit de marque, création en masse', 'Templates, brand kit, bulk creation'), T('Aucune carte bancaire', 'No credit card')], btn: T('Commencer', 'Get started'), live: true, dark: false },
-    { I: Coins, c: '#30D158', name: T('Crédits', 'Credits'), price: T('Bientôt', 'Soon'), per: '', desc: T('Des modèles d’image et de vidéo supplémentaires, payés à l’usage.', 'Extra image and video models, pay as you go.'), feats: [T('Tu paieras uniquement ce que tu génères', 'Pay only for what you generate'), T('Sans abonnement', 'No subscription'), T('Pas encore disponible : aucun paiement n’est demandé', 'Not available yet: no payment is taken')], btn: T('Bientôt', 'Soon'), live: false, dark: true },
-    { I: KeyRound, c: '#0A84FF', name: 'Pro Clés', price: T('Bientôt', 'Soon'), per: '', desc: T('Branche tes propres clés API et paie tes fournisseurs directement.', 'Plug in your own API keys and pay providers directly.'), feats: [T('OpenAI, fal.ai, ElevenLabs et d’autres', 'OpenAI, fal.ai, ElevenLabs and more'), T('Aucune marge sur tes générations', 'No markup on your generations'), T('Pas encore disponible', 'Not available yet')], btn: T('Bientôt', 'Soon'), live: false, dark: false },
-  ];
+  const fr = useApp((st) => st.lang) === 'fr';
+  const PCOL = { free: '#AEAEB2', creator: '#FF9F0A', pro: '#30D158', team: '#BF5AF2' } as const;
+  const PICO = { free: Sparkle, creator: Coins, pro: Sparkles, team: Briefcase } as const;
+  const plans = PLANS.map((p) => ({
+    I: PICO[p.id], c: PCOL[p.id], name: fr ? p.fr : p.en,
+    price: p.eurMonth ? (fr ? p.eurMonth.toLocaleString('fr-FR') + ' €' : '€' + p.eurMonth) : '0 €',
+    per: p.eurMonth ? (p.perSeat ? T('/ siège / mois', '/ seat / month') : T('/ mois', '/ month')) : T('pour toujours', 'forever'),
+    desc: p.xofMonth ? T(`ou ${p.xofMonth.toLocaleString('fr-FR')} FCFA / mois · −17 % à l’année`, `or ${p.xofMonth.toLocaleString('fr-FR')} FCFA / month · −17% yearly`) : T('Sans carte bancaire.', 'No credit card.'),
+    feats: p.features.map((f) => (fr ? f.fr : f.en)),
+    btn: p.eurMonth ? T('Choisir', 'Choose') : T('Commencer', 'Get started'), live: true, dark: p.id === 'pro',
+  }));
 
   const faqs: [string, string][] = [
-    [T('Est-ce vraiment gratuit ?', 'Is it really free?'), T('Oui. Les éditeurs vidéo et design, l’export sans filigrane, les templates et la création en masse sont gratuits, sans limite de projets. L’assistant utilise Claude via ton compte claude.ai.', 'Yes. The video and design editors, watermark-free export, templates and bulk creation are free, with no project limit. The assistant uses Claude through your claude.ai account.')],
+    [T('Est-ce vraiment gratuit ?', 'Is it really free?'), T('Oui. Les éditeurs vidéo et design, l’export sans filigrane et les templates sont gratuits, sans limite de projets, avec 100 crédits IA offerts chaque mois. Dans claude.ai, l’assistant utilise directement ton compte Claude.', 'Yes. The video and design editors, watermark-free export and templates are free, with no project limit and 100 AI credits every month. Inside claude.ai, the assistant uses your Claude account directly.')],
     [T('Faut-il créer un compte ?', 'Do I need an account?'), T('Non. Tu peux tout utiliser tout de suite. Tes projets restent sur cet appareil ; pense à faire une sauvegarde depuis les Paramètres.', 'No. You can use everything right away. Your projects stay on this device; make a backup from Settings.')],
     [T('Mes fichiers sont-ils envoyés sur un serveur ?', 'Are my files sent to a server?'), T('Non. Tes médias, le rendu et les exports restent dans ton navigateur. Quand tu utilises l’assistant, seuls ta demande et la description du document sont envoyés à Claude.', 'No. Your media, rendering and exports stay in your browser. When you use the assistant, only your request and a description of the document are sent to Claude.')],
     [T('Quels formats puis-je exporter ?', 'Which formats can I export?'), T('PNG, JPG et PDF pour les designs ; MP4 ou WebM pour les vidéos selon ton navigateur ; SRT et WebVTT pour les sous-titres.', 'PNG, JPG and PDF for designs; MP4 or WebM for videos depending on your browser; SRT and WebVTT for captions.')],
-    [T('Et les crédits, Pro Clés, les équipes ?', 'What about credits, Pro Keys, teams?'), T('Ils sont en préparation et marqués « Bientôt » dans l’app. Aucun paiement n’est demandé aujourd’hui.', 'They are in progress and marked “Soon” in the app. No payment is taken today.')],
+    [T('Comment fonctionnent les crédits ?', 'How do credits work?'), T('1 crédit = 0,01 €. Chaque requête IA consomme selon sa taille réelle (un texte court : 1 à 3 crédits, une création complète : 25 à 60). L’édition et l’export ne consomment rien. Des packs sans abonnement sont aussi disponibles, dès 5 €.', '1 credit = €0.01. Each AI request uses credits based on its real size (short copy: 1 to 3 credits, a full creation: 25 to 60). Editing and exporting are free. No-subscription packs are available too, from €5.')],
     [T('Puis-je modifier ce que l’IA fait ?', 'Can I change what the AI does?'), T('Oui. En mode Assister tu valides ou refuses chaque proposition, tout s’annule avec ⌘Z et l’historique des versions garde chaque étape.', 'Yes. In Assist mode you approve or refuse each proposal, everything undoes with ⌘Z and version history keeps each step.')],
   ];
 
@@ -271,20 +278,20 @@ export function Site() {
         <section id="tarifs" style={{ padding: '120px 24px 60px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 40 }}>
           <div className="col" style={{ alignItems: 'center', gap: 14, textAlign: 'center' }}>
             <span className="site-pill">{T('Tarifs', 'Pricing')}</span>
-            <h2 className="site-h2 big" style={{ maxWidth: 760 }}>{T('Les éditeurs sont gratuits. Les options payantes arrivent bientôt.', 'The editors are free. Paid options are coming soon.')}</h2>
+            <h2 className="site-h2 big" style={{ maxWidth: 760 }}>{T('Les éditeurs sont gratuits. Tu paies seulement l’IA que tu utilises.', 'The editors are free. You only pay for the AI you use.')}</h2>
           </div>
           <div className="site-plans">
             {plans.map((p, i) => (
               <div key={p.name} data-reveal={i} className="site-plan-h">
                 <div className="col" style={{ height: '100%', borderRadius: 28, background: p.dark ? '#111113' : '#F5F5F7', color: p.dark ? '#F5F5F7' : '#1D1D1F', padding: 28, gap: 14, border: `1px solid ${p.dark ? '#30D158' : 'transparent'}` }}>
                   <span style={{ width: 42, height: 42, borderRadius: 21, background: p.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p.I size={19} color="#111113" /></span>
-                  <span className="row" style={{ gap: 8, fontSize: 21, fontWeight: 700 }}>{p.name}{p.live && <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#E4F8EA', color: '#1E8A48' }}>{T('Disponible', 'Available')}</span>}</span>
+                  <span className="row" style={{ gap: 8, fontSize: 21, fontWeight: 700 }}>{p.name}{p.dark && <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#30D158', color: '#111113' }}>{T('Populaire', 'Popular')}</span>}</span>
                   <div className="row" style={{ alignItems: 'baseline', gap: 6 }}><span style={{ fontSize: 44, fontWeight: 700, letterSpacing: '-.04em' }}>{p.price}</span><span style={{ fontSize: 15, opacity: 0.65 }}>{p.per}</span></div>
                   <span className="pretty" style={{ fontSize: 15, opacity: 0.75, lineHeight: 1.45 }}>{p.desc}</span>
                   <div className="col" style={{ gap: 10, margin: '6px 0 10px' }}>
                     {p.feats.map((ft) => <span key={ft} className="row" style={{ gap: 10, fontSize: 15, lineHeight: 1.4, alignItems: 'flex-start' }}><span style={{ width: 20, height: 20, borderRadius: 10, background: p.c, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', marginTop: 1 }}><Check size={12} color="#111113" /></span><span className="pretty">{ft}</span></span>)}
                   </div>
-                  <button className="site-plan-btn" disabled={!p.live} onClick={start} style={{ background: p.live ? '#1D1D1F' : p.dark ? '#2C2C2E' : '#E5E5EA', color: p.live ? '#fff' : '#8E8E93' }}>{p.btn}</button>
+                  <button className="site-plan-btn" disabled={!p.live} onClick={start} style={{ background: p.dark ? '#30D158' : '#1D1D1F', color: p.dark ? '#111113' : '#fff' }}>{p.btn}</button>
                 </div>
               </div>
             ))}

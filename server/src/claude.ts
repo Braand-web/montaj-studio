@@ -1,9 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { MODEL_OF, usdCost, creditsFor } from '../../app/src/lib/pricing';
+import { authorize, charge, type BillingEnv, type Wallet } from './billing';
 
 // One model turn for the app's agent loop (tools execute in the browser, which owns the
 // documents). Streams NDJSON: {"t":"d","d":text} … then {"t":"end",content,stop_reason}.
 
-export interface ClaudeEnv { ANTHROPIC_API_KEY?: string; UPLOADS: R2Bucket }
+export interface ClaudeEnv extends BillingEnv { ANTHROPIC_API_KEY?: string; UPLOADS: R2Bucket }
 
 type Tier = 'quick' | 'default' | 'complex';
 interface Body {
@@ -15,11 +17,7 @@ interface Body {
 }
 
 // "Rapide" is the app's fast tier; the other two run Claude Opus 5 at different effort levels.
-const MODELS: Record<Tier, { model: string; effort?: 'medium' | 'high' }> = {
-  quick: { model: 'claude-haiku-4-5' },
-  default: { model: 'claude-opus-5', effort: 'medium' },
-  complex: { model: 'claude-opus-5', effort: 'high' },
-};
+const MODELS = MODEL_OF;
 
 export class ClientError extends Error { constructor(public code: string, message: string, public status = 400) { super(message); } }
 
@@ -40,9 +38,11 @@ function b64(bytes: Uint8Array) {
   return btoa(bin);
 }
 
-export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionContext): Promise<Response> {
+export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionContext, wallet: Wallet | null): Promise<Response> {
   if (!env.ANTHROPIC_API_KEY) throw new ClientError('sampling_disabled', 'ANTHROPIC_API_KEY is not configured on the server', 503);
   const body = validate(raw);
+  const tier: Tier = body.tier === 'quick' || body.tier === 'complex' ? body.tier : 'default';
+  if (wallet) await authorize(env, wallet, tier);
   const messages = body.messages;
   // PDFs are read natively by Claude (text and scanned pages), attached before the turn's text.
   if (body.documents?.length) {
@@ -58,7 +58,7 @@ export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionCon
     const content: Anthropic.Beta.BetaContentBlockParam[] = typeof turn.content === 'string' ? [{ type: 'text', text: turn.content }] : [...turn.content];
     messages[i] = { role: turn.role, content: [...docs, ...content] };
   }
-  const cfg = MODELS[body.tier ?? 'default'] ?? MODELS.default;
+  const cfg = MODELS[tier];
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const { readable, writable } = new TransformStream();
   const w = writable.getWriter();
@@ -71,13 +71,24 @@ export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionCon
         max_tokens: 32000,
         messages,
         stream: true,
+        // Tools and instructions repeat on every round of the agent loop: cache them (~10× cheaper reads).
+        cache_control: { type: 'ephemeral' },
         ...(body.tools?.length ? { tools: body.tools.map((t) => ({ name: t.name, description: t.description.slice(0, 1024), input_schema: t.input_schema })) } : {}),
         ...(cfg.effort ? { output_config: { effort: cfg.effort }, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
       };
       const stream = client.beta.messages.stream(params);
       stream.on('text', (d) => { void send({ t: 'd', d }); });
       const msg = await stream.finalMessage();
-      await send({ t: 'end', content: msg.content, stop_reason: msg.stop_reason });
+      // Metered billing on the real tokens of this round (the model that answered, fallbacks included).
+      let billing: { credits: number; balance: number } | undefined;
+      if (wallet) {
+        const u = msg.usage;
+        const usd = usdCost(msg.model, u);
+        const credits = creditsFor(usd);
+        const w = await charge(env, wallet, credits, 'ai', { model: msg.model, tier, tokens_in: u.input_tokens, tokens_out: u.output_tokens, cache_read: u.cache_read_input_tokens ?? 0, cache_write: u.cache_creation_input_tokens ?? 0, cost_usd: Math.round(usd * 1e6) / 1e6 });
+        billing = { credits, balance: w.sub_credits + w.pack_credits };
+      }
+      await send({ t: 'end', content: msg.content, stop_reason: msg.stop_reason, billing });
     } catch (e) {
       let code = 'upstream_error';
       if (e instanceof Anthropic.RateLimitError) code = 'rate_limited';

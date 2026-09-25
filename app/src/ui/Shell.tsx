@@ -8,6 +8,7 @@ import { bytes, uid } from '../lib/util';
 import { LogoMark } from './kit';
 import { useNotifs } from '../lib/notify';
 import { useIdentity } from '../lib/identity';
+import { useWallet } from '../lib/wallet';
 import { emptyVideo } from '../lib/create';
 import { fmt } from '../model/formats';
 
@@ -88,6 +89,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const r = () => setNarrow(window.innerWidth < 860);
     window.addEventListener('resize', r);
     void estimate().then(setStore);
+    void useWallet.getState().load();
     void navigator.storage?.persisted?.().then(setPersisted).catch(() => undefined);
     void get<boolean>('kv', 'fbSeen').then((v) => setFbSeen(!!v));
     void get<{ title: string }[]>('kv', 'chats').then((c) => setLastChat(c?.[0]?.title ?? null));
@@ -95,8 +97,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [screen]);
   const trashed = docs.filter((d) => d.trashedAt).length;
   const recent = docs.filter((d) => !d.trashedAt).slice(0, 3);
+  const wallet = useWallet((s) => s.info);
+  const walletOn = useWallet((s) => s.enabled);
   const nav = NAV.filter((n) => n.id !== 'admin' || id.isOwner);
-  const note = (n: NavItem) => n.id === 'trash' && trashed ? String(trashed) : n.id === 'credits' ? T('Gratuit', 'Free') : n.id === 'providers' ? '1/9' : n.id === 'feedback' && !fbSeen ? T('Nouveau', 'New') : '';
+  const note = (n: NavItem) => n.id === 'trash' && trashed ? String(trashed) : n.id === 'credits' ? (walletOn ? (wallet ? wallet.credits.total.toLocaleString() : '') : T('Gratuit', 'Free')) : n.id === 'providers' ? '1/9' : n.id === 'feedback' && !fbSeen ? T('Nouveau', 'New') : '';
   const displayName = userName || id.name;
 
   const navRef = useRef<HTMLElement>(null);

@@ -15,7 +15,8 @@ await step('site: features menu + FAQ + pricing', async () => {
   await page.getByRole('button', { name: /Fonctionnalités/ }).click();
   await page.locator('.site-menu-card', { hasText: 'Tarifs' }).click();
   await page.getByText('Les éditeurs sont gratuits').waitFor();
-  if (!(await page.getByRole('button', { name: 'Bientôt' }).first().isDisabled())) throw new Error('paid plan not disabled');
+  await page.getByText('7,99 €').first().waitFor();
+  if ((await page.getByRole('button', { name: 'Choisir' }).count()) < 3) throw new Error('paid plans missing');
   await page.getByRole('button', { name: 'Faut-il créer un compte ?' }).click();
   await page.getByText('Tu peux tout utiliser tout de suite').waitFor();
 });

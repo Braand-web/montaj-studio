@@ -2,7 +2,7 @@
 // the app is hosted by that Worker; inside claude.ai the page cannot reach any server, so
 // every caller falls back to in-browser processing and says so.
 
-export interface BackendInfo { ok: boolean; ai: boolean; upload: boolean; scrape: boolean; browser: boolean; transcribe: boolean; maxVideoMb: number; maxFileMb: number }
+export interface BackendInfo { ok: boolean; ai: boolean; upload: boolean; scrape: boolean; browser: boolean; transcribe: boolean; maxVideoMb: number; maxFileMb: number; billing?: boolean; payments?: { stripe: boolean; plans: Record<string, { month: boolean; year: boolean }>; packs: boolean; mobileMoney: boolean } }
 
 const NONE: BackendInfo = { ok: false, ai: false, upload: false, scrape: false, browser: false, transcribe: false, maxVideoMb: 0, maxFileMb: 0 };
 let infoP: Promise<BackendInfo> | null = null;
@@ -11,7 +11,15 @@ export const accessCode = {
   get: () => { try { return localStorage.getItem('ms:accessCode') ?? ''; } catch { return ''; } },
   set: (v: string) => { try { localStorage.setItem('ms:accessCode', v); } catch { /* storage blocked */ } infoP = null; },
 };
-export const apiHeaders = (extra: Record<string, string> = {}) => ({ ...extra, ...(accessCode.get() ? { 'x-montaj-code': accessCode.get() } : {}) });
+// Credit wallet of this device until accounts exist (Supabase): a random id kept in this browser.
+export function walletId(): string {
+  try {
+    let id = localStorage.getItem('ms:wallet');
+    if (!id || !/^[a-f0-9-]{36}$/.test(id)) { id = crypto.randomUUID(); localStorage.setItem('ms:wallet', id); }
+    return id;
+  } catch { return (window as unknown as { __msWallet?: string }).__msWallet ??= crypto.randomUUID(); }
+}
+export const apiHeaders = (extra: Record<string, string> = {}) => ({ ...extra, 'x-montaj-wallet': walletId(), ...(accessCode.get() ? { 'x-montaj-code': accessCode.get() } : {}) });
 
 export function backend(): Promise<BackendInfo> {
   if (!infoP) {
@@ -40,8 +48,7 @@ export function upload(file: Blob, name: string, onProgress: (p: number) => void
     const x = new XMLHttpRequest();
     x.open('PUT', `/api/upload?name=${encodeURIComponent(name)}`);
     x.setRequestHeader('content-type', file.type || 'application/octet-stream');
-    const code = accessCode.get();
-    if (code) x.setRequestHeader('x-montaj-code', code);
+    for (const [k, v] of Object.entries(apiHeaders())) x.setRequestHeader(k, v);
     x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
     x.onload = () => {
       let body: { id?: string; size?: number; kind?: string; error?: string; code?: string } = {};

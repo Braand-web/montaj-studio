@@ -14,7 +14,7 @@ const SCREENS: Screen[] = ['onboarding', 'home', 'chat', 'credits', 'feedback', 
 // Hash routes (#/templates, #/design/<id>) so the browser back/forward buttons and reloads work.
 function parseHash(): { screen: Screen; docId: string | null } | null {
   try {
-    const [a, b] = location.hash.replace(/^#\/?/, '').split('/');
+    const [a, b] = location.hash.replace(/^#\/?/, '').split('?')[0].split('/');
     if (!SCREENS.includes(a as Screen)) return null;
     if ((a === 'design' || a === 'video') && !b) return null;
     return { screen: a as Screen, docId: b ? decodeURIComponent(b) : null };
@@ -138,6 +138,8 @@ export function useT() {
 export const tNow = (fr: string, en: string) => (useApp.getState().lang === 'fr' ? fr : en);
 
 // Keep the URL in sync with the first screen, then follow the browser's back/forward buttons.
+// Query of the boot hash (#/credits?checkout=success after Stripe), kept before the rewrite below.
+export const bootQuery = (() => { try { return new URLSearchParams(location.hash.split('?')[1] ?? ''); } catch { return new URLSearchParams(); } })();
 writeHistory(useApp.getState().screen, useApp.getState().docId, true);
 window.addEventListener('popstate', (e) => {
   const st = (e.state as { screen?: Screen; docId?: string | null } | null) ?? parseHash();

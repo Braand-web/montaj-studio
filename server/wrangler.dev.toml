@@ -10,3 +10,8 @@ run_worker_first = ["/api/*"]
 [[r2_buckets]]
 binding = "UPLOADS"
 bucket_name = "montaj-studio-uploads"
+[[d1_databases]]
+binding = "DB"
+database_name = "montaj-studio"
+database_id = "local-dev"
+migrations_dir = "migrations"

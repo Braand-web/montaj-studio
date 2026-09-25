@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack, LayoutGrid } from 'lucide-react';
+import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack, LayoutGrid, Repeat, ImageDown, SkipForward } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useVideo, V, newClip, freeTrack, trackEnd, duration, defaultFx, videoSnapshot, fmtDur } from './store';
 import { Engine } from './engine';
@@ -84,14 +84,18 @@ export function VideoEditor() {
       if (!st.doc || dialog === 'export') return;
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
-      if (k === ' ') { e.preventDefault(); togglePlay(); return; }
+      if (k === ' ' || (!mod && k === 'k')) { e.preventDefault(); togglePlay(); return; }
+      if (!mod && k === 'j') { seekTo(st.t - (e.shiftKey ? 5 : 1)); return; }
+      if (!mod && k === 'l') { seekTo(st.t + (e.shiftKey ? 5 : 1)); return; }
+      if (k === 'end') { seekTo(duration(st.view())); return; }
       if (st.draft || st.busy) return;
       if (mod && k === 'z') { e.preventDefault(); if (e.shiftKey) st.redo(); else st.undo(); return; }
       if (mod && k === 'y') { e.preventDefault(); st.redo(); return; }
       if (!mod && k === 's') { if (st.sel && !V.split(st.sel, st.t)) notify(T('Place la tête de lecture sur le clip sélectionné pour le scinder.', 'Put the playhead over the selected clip to split it.'), 'info'); return; }
       if (!mod && k === 'm') { V.marker(st.t); return; }
+      if (mod && k === 'd') { e.preventDefault(); if (st.sel) V.duplicate(st.sel); return; }
       if (k === 'delete' || k === 'backspace') {
-        if (st.sel) { e.preventDefault(); V.remove(st.sel); }
+        if (st.sel) { e.preventDefault(); if (e.shiftKey) V.rippleDelete(st.sel); else V.remove(st.sel); }
         else if (st.selCap) { e.preventDefault(); const id = st.selCap; st.apply((d) => { d.captions = d.captions.filter((c) => c.id !== id); }); }
         return;
       }
@@ -199,7 +203,11 @@ function Preview() {
     if (!canvasRef.current) return;
     engine = new Engine(canvasRef.current, useVideo.getState().view());
     engine.onTime = (x) => useVideo.getState().setT(x);
-    engine.onEnd = () => useVideo.getState().setPlaying(false);
+    engine.onEnd = () => {
+      // Loop playback: start again from the beginning instead of stopping.
+      if (useVideo.getState().loop && engine) { engine.seek(0); engine.play(); return; }
+      useVideo.getState().setPlaying(false);
+    };
     engine.seek(useVideo.getState().t);
     return () => { saveThumb(); engine?.destroy(); engine = null; };
   }, []);
@@ -227,6 +235,18 @@ function Preview() {
     notify(T('Image capturée : nouveau document design créé.', 'Frame captured: new design document created.'));
     engine.pause();
     go('design', doc.id);
+  };
+
+  const loop = useVideo((s) => s.loop);
+  const saveFrame = async () => {
+    if (!engine) return;
+    const c = document.createElement('canvas');
+    engine.drawTo(c, engine.t);
+    const blob = await canvasBlob(c, 'image/png');
+    const d = useVideo.getState().doc!;
+    const r = await saveFile(`${slug(d.name) || 'video'}_${tc(engine.t).replace(/[:.]/g, '-')}.png`, blob);
+    if (r === 'saved') notify(T('Image PNG enregistrée.', 'PNG frame saved.'));
+    else if (r === 'failed') notify(T('Impossible d’enregistrer l’image.', 'Could not save the frame.'), 'err');
   };
 
   const onDrop = async (e: React.DragEvent) => {
@@ -263,8 +283,12 @@ function Preview() {
       <div className="row" style={{ height: 42, flex: 'none', gap: 10, padding: '0 14px', borderTop: '1px solid var(--line)' }}>
         <button className="btn icon" onClick={() => seekTo(0)} title={T('Début', 'Start')}><SkipBack size={13} /></button>
         <button className="btn icon" style={{ width: 34 }} onClick={togglePlay} title={T('Lecture / pause (Espace)', 'Play / pause (Space)')}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
+        <button className="btn icon" onClick={() => seekTo(dur)} title={T('Fin (Fin)', 'End (End)')}><SkipForward size={13} /></button>
+        <button className={'btn icon' + (loop ? ' on-acc' : '')} aria-pressed={loop} onClick={() => useVideo.getState().setLoop(!loop)} title={T('Lecture en boucle', 'Loop playback')}><Repeat size={13} /></button>
         <span className="mono tnum" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tc(t)} <span className="faint">/ {tc(dur)}</span></span>
+        <span className="faint hide-narrow" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>J · K · L</span>
         <div className="grow" />
+        <button className="btn ghost" style={{ height: 28 }} disabled={!view.clips.length} onClick={() => void saveFrame()} title={T('Enregistre l’image affichée en PNG', 'Saves the current frame as PNG')}><ImageDown size={13} />{T('Image PNG', 'PNG frame')}</button>
         <button className="btn ghost" style={{ height: 28 }} disabled={!view.clips.length} onClick={() => void capture()}><Camera size={13} />{T('Capturer en design', 'Capture as design')}</button>
         <button className={'btn ghost'} style={{ height: 28, borderColor: safe ? 'var(--accTx)' : undefined }} onClick={() => setSafe(!safe)}>{T('Zones de sécurité', 'Safe zones')}</button>
       </div>
@@ -527,7 +551,7 @@ function Inspector() {
         <div className="col" style={{ gap: 6 }}><span style={{ fontSize: 11, color: 'var(--tx3)' }}>{T('Fond', 'Background')}</span>
           <div className="row wrap" style={{ gap: 6 }}>{['#000000', ...brand.colors].map((h) => <button key={h} onClick={() => useVideo.getState().apply((d) => { d.bg = h; })} style={{ width: 28, height: 28, borderRadius: 10, border: view.bg === h ? '2px solid var(--acc)' : '1px solid var(--line2)', background: h }} title={h} />)}</div>
         </div>
-        <span className="muted pretty" style={{ fontSize: 12 }}>{T('Sélectionne un clip pour régler sa couleur, ses effets, son filtre et sa transition. Raccourcis : Espace lecture, S scinder, Suppr supprimer, M marqueur, ← → image par image.', 'Select a clip to adjust its color, effects, filter and transition. Shortcuts: Space play, S split, Del delete, M marker, ← → frame by frame.')}</span>
+        <span className="muted pretty" style={{ fontSize: 12 }}>{T('Sélectionne un clip pour régler sa couleur, ses effets, son filtre et sa transition. Raccourcis : Espace ou K lecture, J/L ±1 s, S scinder, ⌘D dupliquer, ⇧Suppr supprimer et refermer, M marqueur, ← → image par image. Clic droit sur un clip pour plus d’actions.', 'Select a clip to adjust its color, effects, filter and transition. Shortcuts: Space or K play, J/L ±1 s, S split, ⌘D duplicate, ⇧Del ripple delete, M marker, ← → frame by frame. Right-click a clip for more.')}</span>
       </div>
     );
   }

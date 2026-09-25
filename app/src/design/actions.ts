@@ -1,3 +1,5 @@
+import { SHAPES } from './shapes';
+import type { ShapeKind } from '../model/types';
 import type { DesignData, El, Page } from '../model/types';
 import { useDesign, newEl, resizePage } from './store';
 import { deepClone, uid } from '../lib/util';
@@ -168,6 +170,20 @@ export function arrange(to: 'front' | 'back' | 'forward' | 'backward') {
       p.els.splice(j, 0, el);
     }
   }, { keepSel: true });
+}
+
+export function flip(axis: 'x' | 'y') {
+  const sel = S().sel;
+  if (!sel.length) return;
+  updateEls(sel, (e) => { if (e.locked) return; if (axis === 'x') e.flipX = !e.flipX; else e.flipY = !e.flipY; });
+}
+
+export function addVector(shape: ShapeKind) {
+  const page = S().page();
+  const brand = useApp.getState().brand;
+  const k = Math.min(page.w, page.h) * 0.32;
+  const def = SHAPES.find((x) => x.k === shape)!;
+  return addElement({ type: 'shape', shape, name: useApp.getState().lang === 'fr' ? def.fr : def.en, w: Math.round(def.ratio < 1 ? k : k), h: Math.round(k * def.ratio), fill: brand.colors[3] ?? '#2E6BFF' });
 }
 
 export function toggleLock() {

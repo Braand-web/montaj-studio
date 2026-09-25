@@ -32,6 +32,10 @@ interface VideoState {
   sel: string | null;
   selCap: string | null;
   pps: number; // timeline pixels per second
+  snap: boolean;
+  loop: boolean;
+  setSnap(v: boolean): void;
+  setLoop(v: boolean): void;
   load(doc: Doc<VideoData>): void;
   data(): VideoData;
   view(): VideoData;
@@ -70,7 +74,9 @@ export const useVideo = create<VideoState>((set, get) => {
     persist(next);
   };
   return {
-    doc: null, past: [], future: [], draft: null, changed: [], busy: false, t: 0, playing: false, sel: null, selCap: null, pps: 40,
+    doc: null, past: [], future: [], draft: null, changed: [], busy: false, t: 0, playing: false, sel: null, selCap: null, pps: 40, snap: true, loop: false,
+    setSnap(v) { set({ snap: v }); },
+    setLoop(v) { set({ loop: v }); },
     load(doc) { set({ doc, past: [], future: [], draft: null, changed: [], busy: false, t: 0, playing: false, sel: null, selCap: null }); },
     data() { return get().doc!.data; },
     view() { return get().draft ?? get().doc!.data; },
@@ -163,6 +169,41 @@ export const V = {
     }, coalesce ?? (typeof patch === 'object' ? id + Object.keys(patch).join() : undefined));
   },
   add(c: Clip) { useVideo.getState().apply((d) => { d.clips.push(c); }); useVideo.getState().select(c.id); return c.id; },
+  duplicate(id: string) {
+    const st = useVideo.getState();
+    const c = st.data().clips.find((x) => x.id === id);
+    if (!c) return null;
+    const copy: Clip = { ...deepClone(c), id: uid('c') };
+    // Right after the original on the same track, or the first free track at that time.
+    copy.start = Math.round((c.start + c.dur) * 100) / 100;
+    copy.track = freeTrack(st.data(), c.track, copy.start, copy.dur);
+    st.apply((d) => {
+      // Push later clips on that track to make room.
+      if (copy.track === c.track) for (const x of d.clips) if (x.track === c.track && x.id !== c.id && x.start >= copy.start - 0.01) x.start = Math.round((x.start + copy.dur) * 100) / 100;
+      d.clips.push(copy);
+    });
+    st.select(copy.id);
+    return copy.id;
+  },
+  // Delete a clip and pull the following clips of the same track left to close the gap.
+  rippleDelete(id: string) {
+    useVideo.getState().apply((d) => {
+      const c = d.clips.find((x) => x.id === id);
+      if (!c) return;
+      d.clips = d.clips.filter((x) => x.id !== id);
+      for (const x of d.clips) if (x.track === c.track && x.start >= c.start + c.dur - 0.01) x.start = Math.round((x.start - c.dur) * 100) / 100;
+    });
+  },
+  // Packs the clips of a track one after another from 0, removing every gap.
+  closeGaps(track: TrackId) {
+    let moved = 0;
+    useVideo.getState().apply((d) => {
+      const cs = d.clips.filter((x) => x.track === track).sort((a, b) => a.start - b.start);
+      let t = cs.length ? Math.min(cs[0].start, 0) : 0;
+      for (const c of cs) { if (Math.abs(c.start - t) > 0.01) moved++; c.start = Math.round(t * 100) / 100; t += c.dur; }
+    });
+    return moved;
+  },
   marker(at: number) {
     useVideo.getState().apply((d) => {
       const i = d.markers.findIndex((m) => Math.abs(m - at) < 0.05);

@@ -4,6 +4,7 @@ import { fontCss } from '../model/fonts';
 import { prims } from './prims';
 import { mediaUrlSync } from '../lib/media';
 import { bgBoxColor, outlineColor, textInk, ANIM_DUR } from './render';
+import { adjFilter, lsEm, shapePath } from './shapes';
 
 // DOM view of one element. Coordinates are percentages of the page and type sizes are in
 // container units, so the same markup renders the canvas, thumbnails and presentation mode.
@@ -25,7 +26,7 @@ export function ElementView({ el, page, animate, outline, onPointerDown, dim }: 
     position: 'absolute',
     left: pct(el.x, pw), top: pct(el.y, page.h), width: pct(el.w, pw), height: pct(el.h, page.h),
     opacity: (el.opacity ?? 1) * (dim ? 0.35 : 1),
-    transform: el.rot ? `rotate(${el.rot}deg)` : undefined,
+    transform: [el.rot ? `rotate(${el.rot}deg)` : '', el.flipX ? 'scaleX(-1)' : '', el.flipY ? 'scaleY(-1)' : ''].filter(Boolean).join(' ') || undefined,
     outline, outlineOffset: 2,
     cursor: onPointerDown ? (el.locked ? 'default' : 'move') : undefined,
     userSelect: 'none',
@@ -51,7 +52,7 @@ export function ElementView({ el, page, animate, outline, onPointerDown, dim }: 
       base.borderRadius = cq(el.radius ?? 0, pw);
       base.overflow = 'hidden';
       if (url) {
-        inner = <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: el.fit ?? 'cover', display: 'block', pointerEvents: 'none' }} />;
+        inner = <img src={url} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: el.fit ?? 'cover', display: 'block', pointerEvents: 'none', filter: adjFilter(el.adj, (px) => cq(px, pw)) }} />;
       } else {
         base.background = 'repeating-linear-gradient(135deg, rgba(140,140,140,.35) 0 10px, rgba(140,140,140,.16) 10px 20px), #2A2D31';
         inner = <span style={{ position: 'absolute', left: 6, bottom: 6, fontFamily: 'var(--mono)', fontSize: 10, color: '#C9CCD1', background: 'rgba(0,0,0,.45)', padding: '2px 6px', borderRadius: 6, whiteSpace: 'nowrap', maxWidth: 'calc(100% - 12px)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{el.name} · photo</span>;
@@ -67,7 +68,8 @@ export function ElementView({ el, page, animate, outline, onPointerDown, dim }: 
         fontSize: cq(size, pw),
         fontWeight: el.weight ?? 700,
         lineHeight: el.lh ?? 1.1,
-        letterSpacing: '-.01em',
+        letterSpacing: `${lsEm(el.ls)}em`,
+        fontStyle: el.italic ? 'italic' : undefined,
         textAlign: el.align ?? 'left',
         whiteSpace: 'pre-wrap',
         overflowWrap: 'break-word',
@@ -82,6 +84,13 @@ export function ElementView({ el, page, animate, outline, onPointerDown, dim }: 
       inner = el.text;
       break;
     }
+    case 'shape':
+      inner = (
+        <svg viewBox={`0 0 ${el.w} ${el.h}`} width="100%" height="100%" preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible', pointerEvents: 'none' }}>
+          <path d={shapePath(el.shape ?? 'star', el.w, el.h)} fill={el.fill ?? '#FFD23F'} stroke={el.stroke && el.strokeW ? el.stroke : undefined} strokeWidth={el.strokeW || undefined} strokeLinejoin="round" />
+        </svg>
+      );
+      break;
     case 'chart':
     case 'table':
     case 'qr': {

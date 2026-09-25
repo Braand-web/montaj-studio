@@ -1,4 +1,4 @@
-import type { DesignData, El, ElType, FontKey, Page } from '../model/types';
+import type { DesignData, El, ElType, FontKey, Page, ShapeKind } from '../model/types';
 import type { AgentTool } from './runner';
 import { num, str, bool } from './runner';
 import { newEl, resizePage } from '../design/store';
@@ -14,7 +14,8 @@ export interface DataTarget<T> {
   changes: string[];
 }
 
-const EL_TYPES: ElType[] = ['text', 'rect', 'circle', 'line', 'image', 'chart', 'table', 'qr'];
+const EL_TYPES: ElType[] = ['text', 'rect', 'circle', 'line', 'image', 'chart', 'table', 'qr', 'shape'];
+const SHAPE_KINDS: ShapeKind[] = ['triangle', 'diamond', 'hexagon', 'star', 'arrow', 'heart', 'bubble', 'burst'];
 
 export function compactDesign(d: DesignData) {
   return d.pages.map((p, i) => ({
@@ -22,7 +23,13 @@ export function compactDesign(d: DesignData) {
     els: p.els.map((e) => {
       const o: Record<string, unknown> = { id: e.id, type: e.type, name: e.name, x: Math.round(e.x), y: Math.round(e.y), w: Math.round(e.w), h: Math.round(e.h) };
       if (e.type === 'text') Object.assign(o, { text: e.text, size: Math.round(e.size ?? 48), weight: e.weight, color: e.color, font: e.font ?? 'sans', align: e.align ?? 'left' });
-      if (['rect', 'circle', 'line', 'chart', 'qr'].includes(e.type) && e.fill) o.fill = e.fill;
+      if (['rect', 'circle', 'line', 'chart', 'qr', 'shape'].includes(e.type) && e.fill) o.fill = e.fill;
+      if (e.type === 'shape') o.shape = e.shape;
+      if (e.flipX) o.flipX = true;
+      if (e.flipY) o.flipY = true;
+      if (e.italic) o.italic = true;
+      if (e.ls !== undefined) o.ls = e.ls;
+      if (e.adj) o.adj = e.adj;
       if (e.type === 'image') o.media = e.mediaId ? 'set' : 'empty';
       if (e.type === 'chart') o.data = e.data;
       if (e.type === 'table') o.rows = e.rows;
@@ -70,6 +77,16 @@ function applyProps(el: El, a: Record<string, unknown>) {
   if (a.qr !== undefined) el.qr = str(a.qr);
   if (a.kind !== undefined) { const v = str(a.kind); if (v === 'col' || v === 'bar') el.kind = v; }
   if (a.mediaId !== undefined) el.mediaId = str(a.mediaId);
+  if (a.shape !== undefined) { const v = str(a.shape) as ShapeKind; if (!SHAPE_KINDS.includes(v)) throw new Error('shape must be one of ' + SHAPE_KINDS.join(', ')); el.shape = v; }
+  if (a.flipX !== undefined) el.flipX = bool(a.flipX);
+  if (a.flipY !== undefined) el.flipY = bool(a.flipY);
+  if (a.italic !== undefined) el.italic = bool(a.italic);
+  { const v = num(a.ls); if (v !== undefined) el.ls = Math.max(-100, Math.min(400, v)); }
+  if (a.adj && typeof a.adj === 'object') {
+    const src = a.adj as Record<string, unknown>, out: Record<string, number> = {};
+    for (const k of ['bri', 'con', 'sat', 'hue', 'gray', 'blur']) { const v = num(src[k]); if (v !== undefined) out[k] = Math.max(k === 'gray' || k === 'blur' ? 0 : -100, Math.min(100, v)); }
+    el.adj = out;
+  }
 }
 
 const PROPS = {
@@ -84,6 +101,10 @@ const PROPS = {
   rows: { type: 'array', description: 'table cells, array of rows of strings' },
   qr: { type: 'string' }, kind: { type: 'string', enum: ['col', 'bar'] },
   mediaId: { type: 'string', description: 'id of an image from list_media' },
+  shape: { type: 'string', enum: SHAPE_KINDS, description: 'for type shape' },
+  flipX: { type: 'boolean' }, flipY: { type: 'boolean' }, italic: { type: 'boolean' },
+  ls: { type: 'number', description: 'letter spacing in thousandths of an em (-100..400)' },
+  adj: { type: 'object', description: 'image adjustments {bri, con, sat, hue: -100..100, gray, blur: 0..100}' },
 };
 
 export function designTools(t: DataTarget<DesignData>, ctx: { brand: BrandKit; media: () => MediaItem[] }): AgentTool[] {
@@ -101,7 +122,7 @@ export function designTools(t: DataTarget<DesignData>, ctx: { brand: BrandKit; m
     },
     {
       name: 'add_element', write: true,
-      description: 'Adds an element to a page. type: text | rect | circle | line | image | chart | table | qr. Geometry in page pixels (origin top-left). Returns the new id.',
+      description: 'Adds an element to a page. type: text | rect | circle | line | image | chart | table | qr | shape (set shape: triangle, diamond, hexagon, star, arrow, heart, bubble, burst). Geometry in page pixels (origin top-left). Returns the new id.',
       schema: { page: { type: 'number' }, type: { type: 'string', enum: EL_TYPES }, ...PROPS },
       required: ['page', 'type'],
       run: (a) => {
@@ -113,6 +134,7 @@ export function designTools(t: DataTarget<DesignData>, ctx: { brand: BrandKit; m
           const el = newEl({ type, name: str(a.name) ?? type }, p);
           if (type === 'text') Object.assign(el, { text: 'Texte', size: Math.round(p.w * 0.06), weight: 700, color: '#0F1115', lh: 1.1, h: Math.round(p.w * 0.1) });
           if (type === 'rect' || type === 'circle') el.fill = ctx.brand.colors[2] ?? '#FFD23F';
+          if (type === 'shape') { el.shape = 'star'; el.fill = ctx.brand.colors[3] ?? '#2E6BFF'; el.w = el.h = Math.round(Math.min(p.w, p.h) * 0.3); }
           if (type === 'chart') Object.assign(el, { data: [['A', 3], ['B', 5], ['C', 8]], kind: 'col', fill: ctx.brand.colors[3] ?? '#2E6BFF', color: '#0F1115' });
           if (type === 'table') el.rows = [['Colonne 1', 'Colonne 2'], ['—', '—']];
           if (type === 'qr') { el.qr = 'https://exemple.com'; el.w = el.h = Math.round(Math.min(p.w, p.h) * 0.25); }

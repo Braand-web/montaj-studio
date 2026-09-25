@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown, Play } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown, Play, FlipHorizontal2, FlipVertical2, RotateCcw, Italic } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useDesign } from './store';
 import type { El, FontKey, Page } from '../model/types';
 import { Chips, ColorRow, NumField } from '../ui/kit';
-import { align, animatePage, distribute, setPageBg, updateEls, arrange } from './actions';
+import { align, animatePage, distribute, setPageBg, updateEls, arrange, flip } from './actions';
+import type { ImgAdjust } from '../model/types';
 import { FONTS, FONT_KEYS } from '../model/fonts';
 import { contrast } from '../lib/util';
 import { dimsLabel } from '../model/formats';
@@ -50,7 +51,22 @@ export function Inspector({ onPreviewAnim }: { onPreviewAnim(): void }) {
             <NumField id="insp-rot" label={T('Rotation (°)', 'Rotation (°)')} value={cur.rot ?? 0} onChange={(v) => upd({ rot: v })} />
             <NumField id="insp-op" label={T('Opacité (%)', 'Opacity (%)')} value={Math.round((cur.opacity ?? 1) * 100)} onChange={(v) => upd({ opacity: Math.max(0, Math.min(100, v)) / 100 })} />
           </div>
+          <Group label={T('Retourner', 'Flip')}>
+            <div className="seg-sm">
+              <button className={cur.flipX ? 'on' : ''} onClick={() => flip('x')} title={T('Horizontalement (⇧H)', 'Horizontally (⇧H)')}><FlipHorizontal2 size={13} />{T('Horiz.', 'Horiz.')}</button>
+              <button className={cur.flipY ? 'on' : ''} onClick={() => flip('y')} title={T('Verticalement (⇧V)', 'Vertically (⇧V)')}><FlipVertical2 size={13} />{T('Vert.', 'Vert.')}</button>
+            </div>
+          </Group>
           {cur.type === 'text' && <TextProps el={cur} upd={upd} />}
+          {cur.type === 'image' && cur.mediaId && <ImageAdjust el={cur} upd={upd} />}
+          {cur.type === 'shape' && (
+            <Group label={T('Contour', 'Outline')}>
+              <div className="row" style={{ gap: 8 }}>
+                <div style={{ width: 90 }}><NumField id="insp-sw" label={T('Épaisseur', 'Width')} value={cur.strokeW ?? 0} onChange={(v) => upd({ strokeW: Math.max(0, v), stroke: cur.stroke ?? '#0F1115' })} /></div>
+                {(cur.strokeW ?? 0) > 0 && <ColorRow size={22} colors={palette.slice(0, 5)} value={cur.stroke} onPick={(c) => upd({ stroke: c })} />}
+              </div>
+            </Group>
+          )}
           {(cur.type === 'rect' || cur.type === 'image') && (
             <NumField id="insp-radius" label={T('Arrondi des coins', 'Corner radius')} value={cur.radius ?? 0} onChange={(v) => upd({ radius: Math.max(0, v) })} />
           )}
@@ -112,12 +128,59 @@ function TextProps({ el, upd }: { el: El; upd(p: Partial<El> | ((e: El) => void)
       <Group label={T('Alignement du texte', 'Text alignment')}>
         <Chips small value={el.align ?? 'left'} onChange={(v) => upd({ align: v })} options={[{ id: 'left' as const, label: T('Gauche', 'Left') }, { id: 'center' as const, label: T('Centre', 'Center') }, { id: 'right' as const, label: T('Droite', 'Right') }]} />
       </Group>
+      <div className="row" style={{ gap: 8, alignItems: 'flex-end' }}>
+        <div className="grow"><Range id="insp-ls" label={T('Espacement des lettres', 'Letter spacing')} value={el.ls ?? -10} min={-100} max={400} step={5} onChange={(v) => upd({ ls: v })} /></div>
+        <button className={'btn icon' + (el.italic ? ' primary' : '')} aria-pressed={!!el.italic} title={T('Italique', 'Italic')} onClick={() => upd({ italic: !el.italic })}><Italic size={14} /></button>
+      </div>
       <Group label={T('Effets', 'Effects')}>
         <Chips small value={[el.fx?.shadow ? 'shadow' : '', el.fx?.outline ? 'outline' : '', el.fx?.bg ? 'bg' : '', el.upper ? 'upper' : ''].filter(Boolean) as ('shadow' | 'outline' | 'bg' | 'upper')[]}
           onChange={(k) => upd((e) => { if (k === 'upper') e.upper = !e.upper; else e.fx = { ...e.fx, [k]: !e.fx?.[k] }; })}
           options={[{ id: 'shadow' as const, label: T('Ombre', 'Shadow') }, { id: 'outline' as const, label: T('Contour', 'Outline') }, { id: 'bg' as const, label: T('Fond', 'Background') }, { id: 'upper' as const, label: 'MAJ' }]} />
       </Group>
     </>
+  );
+}
+
+function Range({ id, label, value, min, max, step = 1, onChange, suffix = '' }: { id: string; label: string; value: number; min: number; max: number; step?: number; onChange(v: number): void; suffix?: string }) {
+  const [v, setV] = useState(value);
+  const [src, setSrc] = useState(value);
+  if (src !== value) { setSrc(value); setV(value); }
+  return (
+    <label className="col" style={{ gap: 4 }} htmlFor={id}>
+      <span className="row" style={{ justifyContent: 'space-between', fontSize: 11, color: 'var(--tx3)' }}><span>{label}</span><span className="mono">{v}{suffix}</span></span>
+      <input id={id} className="range" type="range" min={min} max={max} step={step} value={v}
+        onChange={(e) => { const n = Number(e.target.value); setV(n); onChange(n); }} onDoubleClick={() => { setV(0); onChange(0); }} />
+    </label>
+  );
+}
+
+const ADJ_PRESETS: { k: string; fr: string; en: string; a: ImgAdjust }[] = [
+  { k: 'none', fr: 'Original', en: 'Original', a: {} },
+  { k: 'vivid', fr: 'Éclatant', en: 'Vivid', a: { sat: 35, con: 12 } },
+  { k: 'warm', fr: 'Chaud', en: 'Warm', a: { hue: -6, sat: 15, bri: 4 } },
+  { k: 'cool', fr: 'Froid', en: 'Cool', a: { hue: 10, sat: -10 } },
+  { k: 'bw', fr: 'N&B', en: 'B&W', a: { gray: 100, con: 15 } },
+  { k: 'fade', fr: 'Délavé', en: 'Faded', a: { con: -25, sat: -20, bri: 8 } },
+  { k: 'drama', fr: 'Dramatique', en: 'Drama', a: { con: 35, bri: -8, sat: -15 } },
+];
+
+function ImageAdjust({ el, upd }: { el: El; upd(p: Partial<El> | ((e: El) => void)): void }) {
+  const T = useT();
+  const a = el.adj ?? {};
+  const set = (k: keyof ImgAdjust, v: number) => upd((e) => { e.adj = { ...e.adj, [k]: v }; });
+  const rows: [keyof ImgAdjust, string, number, number][] = [
+    ['bri', T('Luminosité', 'Brightness'), -100, 100], ['con', T('Contraste', 'Contrast'), -100, 100], ['sat', T('Saturation', 'Saturation'), -100, 100],
+    ['hue', T('Teinte', 'Hue'), -100, 100], ['gray', T('Noir et blanc', 'Grayscale'), 0, 100], ['blur', T('Flou', 'Blur'), 0, 100],
+  ];
+  return (
+    <Group label={T('Réglages de l’image', 'Image adjustments')}>
+      <div className="row wrap" style={{ gap: 4 }}>
+        {ADJ_PRESETS.map((p) => <button key={p.k} className="chip" style={{ height: 26, fontSize: 11 }} onClick={() => upd({ adj: { ...p.a } })}>{T(p.fr, p.en)}</button>)}
+      </div>
+      {rows.map(([k, l, min, max]) => <Range key={k} id={'adj-' + k} label={l} value={a[k] ?? 0} min={min} max={max} onChange={(v) => set(k, v)} />)}
+      <button className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => upd((e) => { delete e.adj; })}><RotateCcw size={11} />{T('Réinitialiser', 'Reset')}</button>
+      <span className="faint" style={{ fontSize: 10 }}>{T('Double-clic sur un curseur pour le remettre à zéro.', 'Double-click a slider to reset it.')}</span>
+    </Group>
   );
 }
 

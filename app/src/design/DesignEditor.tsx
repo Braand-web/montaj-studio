@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Undo2, Redo2, History, Scaling, Presentation, Download, Copy, Trash2, Lock, Unlock, ArrowUpToLine, ArrowDownToLine, Group, Ungroup, Component, CloudCheck, Plus, ChevronLeft, ChevronRight, Sparkles, Layers as LayersIcon, SlidersHorizontal, LayoutGrid } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Undo2, Redo2, History, Scaling, Presentation, Download, Copy, Trash2, Lock, Unlock, ArrowUpToLine, ArrowDownToLine, Group, Ungroup, Component, CloudCheck, Plus, ChevronLeft, ChevronRight, Sparkles, Layers as LayersIcon, SlidersHorizontal, LayoutGrid, FlipHorizontal2, FlipVertical2, ZoomIn, ZoomOut, Maximize, ClipboardPaste, BringToFront, SendToBack, MousePointer2, Type as TypeIcon, AlignCenter } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useDesign, snapshot } from './store';
 import { getDoc } from '../lib/docs';
@@ -16,6 +16,7 @@ import { PageView } from './ElementView';
 import { LogoMark } from '../ui/kit';
 import { dimsLabel } from '../model/formats';
 import * as A from './actions';
+import { ContextMenu, type MenuEntry } from '../ui/ContextMenu';
 
 type RightTab = 'insp' | 'layers' | 'agent';
 
@@ -82,6 +83,14 @@ export function DesignEditor() {
       if (mod && k === 'g') { e.preventDefault(); if (e.shiftKey) A.ungroup(); else A.group(); return; }
       if (mod && k === 'c') { if (A.copySel()) e.preventDefault(); return; }
       if (mod && k === 'v') { A.pasteClipboard(); return; }
+      if (mod && (k === '=' || k === '+')) { e.preventDefault(); st.setZoom(st.zoom * 1.25); return; }
+      if (mod && k === '-') { e.preventDefault(); st.setZoom(st.zoom / 1.25); return; }
+      if (mod && k === '0') { e.preventDefault(); st.setZoom(1); return; }
+      if (!mod && k === ']') { A.arrange(e.shiftKey ? 'front' : 'forward'); return; }
+      if (!mod && k === '[') { A.arrange(e.shiftKey ? 'back' : 'backward'); return; }
+      if (!mod && e.shiftKey && k === 'h') { A.flip('x'); return; }
+      if (!mod && e.shiftKey && k === 'v') { A.flip('y'); return; }
+      if (!mod && !e.shiftKey && k === 't') { A.addText('title'); return; }
       if (mod && k === 'a') { e.preventDefault(); st.select(st.page().els.filter((x) => !x.locked && !x.hidden).map((x) => x.id)); return; }
       if (k === 'delete' || k === 'backspace') { if (st.sel.length) { e.preventDefault(); A.removeSel(); } return; }
       if (k === 'escape') { st.select([]); return; }
@@ -189,9 +198,54 @@ function Stage() {
     { label: T('Arrière-plan', 'Send to back'), icon: <ArrowDownToLine size={12} />, go: () => A.arrange('back') },
     { label: grouped ? T('Dégrouper', 'Ungroup') : T('Grouper', 'Group'), icon: grouped ? <Ungroup size={12} /> : <Group size={12} />, go: grouped ? A.ungroup : A.group, show: selEls.length > 1 || grouped },
     { label: single?.compId ? T('Détacher', 'Detach') : T('Créer un composant', 'Make component'), icon: <Component size={12} />, go: single?.compId ? A.detachComponent : A.makeComponent, show: !!single },
+    { label: T('Retourner', 'Flip'), icon: <FlipHorizontal2 size={12} />, go: () => A.flip('x') },
     { label: allLocked ? T('Déverrouiller', 'Unlock') : T('Verrouiller', 'Lock'), icon: allLocked ? <Unlock size={12} /> : <Lock size={12} />, go: A.toggleLock },
     { label: T('Supprimer', 'Delete'), icon: <Trash2 size={12} />, go: A.removeSel, danger: true },
   ];
+  const zoom = useDesign((s) => s.zoom);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; onEl: boolean } | null>(null);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    // Pinch / Ctrl+wheel zooms the page instead of the browser.
+    const wheel = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); const st = useDesign.getState(); st.setZoom(st.zoom * (e.deltaY < 0 ? 1.1 : 0.9)); };
+    el.addEventListener('wheel', wheel, { passive: false });
+    return () => el.removeEventListener('wheel', wheel);
+  }, []);
+  const menuItems = (): MenuEntry[] => {
+    const cur = useDesign.getState();
+    const els = cur.page().els.filter((e) => cur.sel.includes(e.id));
+    const lockedAll = els.length > 0 && els.every((e) => e.locked);
+    const grp = els.some((e) => e.groupId);
+    if (!menu?.onEl || !els.length) return [
+      { label: T('Coller', 'Paste'), icon: <ClipboardPaste size={13} />, kbd: '⌘V', go: A.pasteClipboard },
+      { label: T('Tout sélectionner', 'Select all'), icon: <MousePointer2 size={13} />, kbd: '⌘A', go: () => cur.select(cur.page().els.filter((x) => !x.locked && !x.hidden).map((x) => x.id)) },
+      'sep',
+      { label: T('Ajouter un titre', 'Add a title'), icon: <TypeIcon size={13} />, kbd: 'T', go: () => A.addText('title') },
+      { label: T('Ajouter une page', 'Add a page'), icon: <Plus size={13} />, go: () => A.addPage() },
+      'sep',
+      { label: T('Zoom ajusté', 'Zoom to fit'), icon: <Maximize size={13} />, kbd: '⌘0', go: () => cur.setZoom(1) },
+    ];
+    return [
+      { label: T('Copier', 'Copy'), icon: <Copy size={13} />, kbd: '⌘C', go: () => { A.copySel(); } },
+      { label: T('Coller', 'Paste'), icon: <ClipboardPaste size={13} />, kbd: '⌘V', go: A.pasteClipboard },
+      { label: T('Dupliquer', 'Duplicate'), icon: <Copy size={13} />, kbd: '⌘D', go: A.duplicateSel },
+      'sep',
+      { label: T('Premier plan', 'Bring to front'), icon: <BringToFront size={13} />, kbd: '⇧]', go: () => A.arrange('front') },
+      { label: T('Avancer', 'Bring forward'), icon: <ArrowUpToLine size={13} />, kbd: ']', go: () => A.arrange('forward') },
+      { label: T('Reculer', 'Send backward'), icon: <ArrowDownToLine size={13} />, kbd: '[', go: () => A.arrange('backward') },
+      { label: T('Arrière-plan', 'Send to back'), icon: <SendToBack size={13} />, kbd: '⇧[', go: () => A.arrange('back') },
+      'sep',
+      { label: T('Retourner horizontalement', 'Flip horizontally'), icon: <FlipHorizontal2 size={13} />, kbd: '⇧H', go: () => A.flip('x') },
+      { label: T('Retourner verticalement', 'Flip vertically'), icon: <FlipVertical2 size={13} />, kbd: '⇧V', go: () => A.flip('y') },
+      { label: T('Centrer sur la page', 'Center on page'), icon: <AlignCenter size={13} />, go: () => { A.align('hcenter', true); A.align('vcenter', true); } },
+      ...(els.length > 1 || grp ? [{ label: grp ? T('Dégrouper', 'Ungroup') : T('Grouper', 'Group'), icon: grp ? <Ungroup size={13} /> : <Group size={13} />, kbd: grp ? '⌘⇧G' : '⌘G', go: grp ? A.ungroup : A.group }] : []),
+      { label: lockedAll ? T('Déverrouiller', 'Unlock') : T('Verrouiller', 'Lock'), icon: lockedAll ? <Unlock size={13} /> : <Lock size={13} />, go: A.toggleLock },
+      'sep',
+      { label: T('Supprimer', 'Delete'), icon: <Trash2 size={13} />, kbd: T('Suppr', 'Del'), go: A.removeSel, danger: true },
+    ];
+  };
   return (
     <div className="dots" style={{ position: 'relative', minWidth: 0, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ height: 44, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 12px' }}>
@@ -214,9 +268,15 @@ function Stage() {
           <span className="faint ell" style={{ fontSize: 11 }}>{T('Clique un élément pour le sélectionner · glisse pour déplacer · double-clic pour modifier un texte · dépose une image sur la page', 'Click to select · drag to move · double-click to edit text · drop an image on the page')}</span>
         )}
       </div>
-      <div style={{ flex: 1, minHeight: 0, padding: '0 28px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', containerType: 'size' }}>
-        <Canvas page={page} readOnly={!!draft || busy || running} changed={draft ? changed : undefined} />
+      <div ref={stageRef} style={{ flex: 1, minHeight: 0, padding: '0 28px 24px', display: 'flex', overflow: zoom > 1 ? 'auto' : 'hidden', containerType: 'size' }}>
+        <Canvas page={page} zoom={zoom} readOnly={!!draft || busy || running} changed={draft ? changed : undefined} onContext={(e, onEl) => setMenu({ x: e.clientX, y: e.clientY, onEl })} />
       </div>
+      <div className="zoombar">
+        <button className="btn bare icon" onClick={() => useDesign.getState().setZoom(zoom / 1.25)} title={T('Dézoomer (⌘−)', 'Zoom out (⌘−)')} aria-label={T('Dézoomer', 'Zoom out')}><ZoomOut size={14} /></button>
+        <button className="btn bare zv mono" onClick={() => useDesign.getState().setZoom(1)} title={T('Ajuster à l’écran (⌘0)', 'Fit to screen (⌘0)')}>{zoom === 1 ? T('Ajusté', 'Fit') : Math.round(zoom * 100) + ' %'}</button>
+        <button className="btn bare icon" onClick={() => useDesign.getState().setZoom(zoom * 1.25)} title={T('Zoomer (⌘+)', 'Zoom in (⌘+)')} aria-label={T('Zoomer', 'Zoom in')}><ZoomIn size={14} /></button>
+      </div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems()} onClose={() => setMenu(null)} />}
     </div>
   );
 }

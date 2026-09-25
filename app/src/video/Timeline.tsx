@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react';
-import { Film, Layers, Mic, Music, Type, Captions, Scissors, Trash2, Bookmark, ZoomIn, ZoomOut } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Film, Layers, Mic, Music, Type, Captions, Scissors, Trash2, Bookmark, ZoomIn, ZoomOut, Magnet, Maximize2, Copy, BetweenHorizontalStart, Volume2, VolumeX, Gauge, SkipForward, Eraser } from 'lucide-react';
 import { useT } from '../store/app';
 import { useVideo, TRACKS, CLIP_COLORS, duration, V } from './store';
 import type { Clip, TrackId } from '../model/types';
 import { mmss } from '../lib/util';
 import { mediaMetaSync } from '../lib/media';
+import { usePeaks, wavePath } from './waveform';
+import { ContextMenu, type MenuEntry } from '../ui/ContextMenu';
 
 const ROW = 38, RULER = 22;
 const ICONS: Record<string, typeof Film> = { type: Type, layers: Layers, film: Film, mic: Mic, music: Music };
@@ -35,8 +37,12 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
     return Math.max(0, (clientX - r.left) / useVideo.getState().pps);
   };
 
+  const snapOn = useVideo((s) => s.snap);
+  const [hover, setHover] = useState<number | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const snap = (t: number, exclude?: string) => {
     const st = useVideo.getState();
+    if (!st.snap) return t;
     const d = st.data();
     const pts = [0, st.t, ...d.markers, ...d.clips.filter((c) => c.id !== exclude).flatMap((c) => [c.start, c.start + c.dur])];
     const th = 8 / st.pps;
@@ -124,6 +130,30 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
     { l: T('Supprimer', 'Delete'), k: T('Suppr', 'Del'), I: Trash2, go: () => { const st = useVideo.getState(); if (st.sel) V.remove(st.sel); } },
     { l: T('Marqueur', 'Marker'), k: 'M', I: Bookmark, go: () => V.marker(useVideo.getState().t) },
   ];
+  const fit = () => {
+    const w = (scroller.current?.parentElement?.clientWidth ?? 800) - 128 - 40;
+    useVideo.getState().setPps(dur > 0 ? w / dur : 40);
+    if (scroller.current?.parentElement) scroller.current.parentElement.scrollLeft = 0;
+  };
+  const menuFor = (id: string): MenuEntry[] => {
+    const st = useVideo.getState();
+    const c = st.data().clips.find((x) => x.id === id);
+    if (!c) return [];
+    const inside = st.t > c.start + 0.05 && st.t < c.start + c.dur - 0.05;
+    const hasAudio = c.kind === 'video' || c.kind === 'audio';
+    return [
+      { label: T('Scinder à la tête de lecture', 'Split at playhead'), icon: <Scissors size={13} />, kbd: 'S', disabled: !inside, go: () => V.split(id, st.t) },
+      { label: T('Dupliquer', 'Duplicate'), icon: <Copy size={13} />, kbd: '⌘D', go: () => V.duplicate(id) },
+      { label: T('Aller au début du clip', 'Go to clip start'), icon: <SkipForward size={13} />, go: () => onSeek(c.start) },
+      'sep',
+      ...(hasAudio ? [{ label: c.muted ? T('Réactiver le son', 'Unmute') : T('Couper le son', 'Mute'), icon: c.muted ? <Volume2 size={13} /> : <VolumeX size={13} />, go: () => V.update(id, { muted: !c.muted }) }] : []),
+      ...(c.kind !== 'text' ? [{ label: T('Vitesse ×2', 'Speed ×2'), icon: <Gauge size={13} />, go: () => { const old = c.speed ?? 1; const v = old === 2 ? 1 : 2; V.update(id, { speed: v, dur: Math.round(((c.dur * old) / v) * 100) / 100 }); } }] : []),
+      { label: T('Combler les vides de la piste', 'Close gaps on this track'), icon: <BetweenHorizontalStart size={13} />, go: () => V.closeGaps(c.track) },
+      'sep',
+      { label: T('Supprimer et refermer', 'Ripple delete'), icon: <Eraser size={13} />, kbd: '⇧Suppr', go: () => V.rippleDelete(id), danger: true },
+      { label: T('Supprimer', 'Delete'), icon: <Trash2 size={13} />, kbd: T('Suppr', 'Del'), go: () => V.remove(id), danger: true },
+    ];
+  };
 
   return (
     <section style={{ borderTop: '1px solid var(--line)', background: 'var(--panel)', display: 'grid', gridTemplateRows: '34px minmax(0,1fr)', minHeight: 0 }}>
@@ -133,8 +163,13 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
             <x.I size={12} />{x.l} <span className="mono faint" style={{ fontSize: 10 }}>{x.k}</span>
           </button>
         ))}
+ <button className="btn sm" disabled={locked || !sel} onClick={() => sel && V.duplicate(sel)} title="⌘D"><Copy size={12} />{T('Dupliquer', 'Duplicate')}</button>
+        <button className="btn sm" disabled={locked} onClick={() => V.closeGaps('video')} title={T('Colle les clips de la piste vidéo les uns aux autres', 'Packs the video track clips together')}><BetweenHorizontalStart size={12} />{T('Combler les vides', 'Close gaps')}</button>
         {draft && <span className="acc" style={{ marginLeft: 10, fontSize: 11 }}>{T("Proposition de l'assistant · contours pointillés = changements", "Assistant's proposal · dashed outlines = changes")}</span>}
         <div className="grow" />
+        <button className={'btn bare icon' + (snapOn ? ' on-acc' : '')} aria-pressed={snapOn} onClick={() => useVideo.getState().setSnap(!snapOn)} title={snapOn ? T('Magnétisme activé', 'Snapping on') : T('Magnétisme désactivé', 'Snapping off')}><Magnet size={14} /></button>
+        <button className="btn bare icon" onClick={fit} title={T('Ajuster la timeline', 'Fit timeline')}><Maximize2 size={14} /></button>
+        <input className="range" type="range" aria-label={T('Zoom de la timeline', 'Timeline zoom')} min={0} max={100} value={Math.round((Math.log(pps / 4) / Math.log(100)) * 100)} onChange={(e) => useVideo.getState().setPps(4 * Math.pow(100, Number(e.target.value) / 100))} style={{ width: 90 }} />
         <button className="btn bare icon" onClick={() => useVideo.getState().setPps(pps / 1.5)} title={T('Dézoomer', 'Zoom out')}><ZoomOut size={14} /></button>
         <button className="btn bare icon" onClick={() => useVideo.getState().setPps(pps * 1.5)} title={T('Zoomer', 'Zoom in')}><ZoomIn size={14} /></button>
         <span className="mono muted" style={{ fontSize: 11 }}>{mmss(dur)}</span>
@@ -149,7 +184,12 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
           <div className="row muted" style={{ height: ROW, flex: 'none', padding: '0 10px', borderBottom: '1px solid var(--line)', fontSize: 11, gap: 6 }}><Captions size={12} color="var(--tx3)" />{T('Sous-titres', 'Captions')}</div>
         </div>
         <div ref={scroller} style={{ minWidth: 0 }} onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); useVideo.getState().setPps(pps * (e.deltaY < 0 ? 1.15 : 0.87)); } }}>
-          <div ref={body} style={{ position: 'relative', width, minWidth: '100%' }}>
+          <div ref={body} style={{ position: 'relative', width, minWidth: '100%' }} onPointerMove={(e) => setHover(timeAt(e.clientX))} onPointerLeave={() => setHover(null)}>
+            {hover !== null && (
+              <div style={{ position: 'absolute', top: 0, bottom: 0, left: hover * pps, width: 1, background: 'var(--tx3)', opacity: 0.5, pointerEvents: 'none', zIndex: 1 }}>
+                <span className="mono" style={{ position: 'absolute', top: 2, left: 4, fontSize: 9, padding: '1px 4px', borderRadius: 4, background: 'var(--panel2)', color: 'var(--tx2)', whiteSpace: 'nowrap' }}>{mmss(hover)}</span>
+              </div>
+            )}
             <div onPointerDown={(e) => { drag.current = { kind: 'seek' }; onSeek(timeAt(e.clientX)); }} style={{ height: RULER, position: 'relative', borderBottom: '1px solid var(--line)', cursor: 'pointer' }}>
               {ticks.map((s) => <div key={s} className="mono" style={{ position: 'absolute', top: 0, bottom: 0, left: s * pps, borderLeft: '1px solid var(--line2)', paddingLeft: 4, fontSize: 9, color: 'var(--tx3)', lineHeight: `${RULER}px`, pointerEvents: 'none' }}>{mmss(s)}</div>)}
               {data.markers.map((m) => <div key={m} title={mmss(m)} style={{ position: 'absolute', top: 11, left: m * pps, width: 8, height: 8, marginLeft: -4, background: '#FFD23F', transform: 'rotate(45deg)', pointerEvents: 'none' }} />)}
@@ -157,18 +197,9 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
             {TRACKS.map((tr) => (
               <div key={tr.id} style={{ height: ROW, position: 'relative', borderBottom: '1px solid var(--line)' }} onPointerDown={(e) => { if (e.target === e.currentTarget) { useVideo.getState().select(null); onSeek(timeAt(e.clientX)); } }}>
                 {data.clips.filter((c) => c.track === tr.id).map((c) => (
-                  <div key={c.id} onPointerDown={(e) => clipDown(e, c, 'move')} title={c.name}
-                    style={{
-                      position: 'absolute', top: 4, bottom: 4, left: c.start * pps, width: Math.max(4, c.dur * pps), background: CLIP_COLORS[c.track], borderRadius: 4,
-                      outline: changed.includes(c.id) ? '2px dashed #FFFFFF' : sel === c.id ? '2px solid #FFFFFF' : undefined, outlineOffset: -1,
-                      color: '#fff', fontSize: 10, padding: '0 8px', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap', cursor: locked ? 'default' : 'grab', userSelect: 'none', touchAction: 'none',
-                    }}>
-                    {c.trIn ? '◧ ' : ''}{c.kind === 'text' ? '“' + (c.text ?? '') + '”' : c.name}{c.fx && (c.fx.filter || c.fx.blur || c.fx.glow || c.fx.vignette || c.fx.bri || c.fx.con || c.fx.sat || c.fx.temp) ? ' · fx' : ''}{c.speed && c.speed !== 1 ? ` · ${c.speed}×` : ''}
-                    {!locked && <>
-                      <span onPointerDown={(e) => clipDown(e, c, 'trimL')} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 7, cursor: 'ew-resize', background: 'rgba(255,255,255,.22)' }} />
-                      <span onPointerDown={(e) => clipDown(e, c, 'trimR')} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 7, cursor: 'ew-resize', background: 'rgba(255,255,255,.22)' }} />
-                    </>}
-                  </div>
+                  <ClipBox key={c.id} c={c} pps={pps} sel={sel === c.id} changed={changed.includes(c.id)} locked={locked}
+                    onDown={(e, k) => clipDown(e, c, k)}
+                    onMenu={(e) => { e.preventDefault(); useVideo.getState().select(c.id); if (!locked) setMenu({ x: e.clientX, y: e.clientY, id: c.id }); }} />
                 ))}
               </div>
             ))}
@@ -185,7 +216,41 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
           </div>
         </div>
       </div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuFor(menu.id)} onClose={() => setMenu(null)} />}
     </section>
+  );
+}
+
+function ClipBox({ c, pps, sel, changed, locked, onDown, onMenu }: { c: Clip; pps: number; sel: boolean; changed: boolean; locked: boolean; onDown(e: React.PointerEvent, k: 'move' | 'trimL' | 'trimR'): void; onMenu(e: React.MouseEvent): void }) {
+  const hasAudio = c.kind === 'audio' || c.kind === 'video';
+  const peaks = usePeaks(hasAudio ? c.mediaId : undefined);
+  const meta = mediaMetaSync(c.mediaId);
+  const w = Math.max(4, c.dur * pps);
+  const thumb = (c.kind === 'video' || c.kind === 'image') && meta?.thumb ? meta.thumb : undefined;
+  const H = ROW - 8;
+  const fxOn = c.fx && (c.fx.filter || c.fx.blur || c.fx.glow || c.fx.vignette || c.fx.bri || c.fx.con || c.fx.sat || c.fx.temp);
+  return (
+    <div onPointerDown={(e) => onDown(e, 'move')} onContextMenu={onMenu} title={c.name} className="clip"
+      style={{
+        position: 'absolute', top: 4, bottom: 4, left: c.start * pps, width: w, background: CLIP_COLORS[c.track], borderRadius: 5,
+        outline: changed ? '2px dashed #FFFFFF' : sel ? '2px solid #FFFFFF' : undefined, outlineOffset: -1,
+        color: '#fff', fontSize: 10, padding: '0 8px', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap', cursor: locked ? 'default' : 'grab', userSelect: 'none', touchAction: 'none',
+        boxShadow: sel ? '0 4px 14px rgba(0,0,0,.35)' : undefined,
+      }}>
+      {thumb && <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: `url(${thumb})`, backgroundSize: `auto 100%`, backgroundRepeat: 'repeat-x', opacity: 0.45, pointerEvents: 'none' }} />}
+      {peaks && !c.muted && (
+        <svg aria-hidden width={w} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none', opacity: c.kind === 'video' ? 0.55 : 0.8 }}>
+          <path d={wavePath(peaks, c.in, c.dur, c.speed ?? 1, w, H)} stroke="rgba(255,255,255,.85)" strokeWidth={2} strokeLinecap="round" />
+        </svg>
+      )}
+      <span style={{ position: 'relative', textShadow: '0 1px 2px rgba(0,0,0,.6)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {c.muted ? '🔇 ' : ''}{c.trIn ? '◧ ' : ''}{c.kind === 'text' ? '“' + (c.text ?? '') + '”' : c.name}{fxOn ? ' · fx' : ''}{c.speed && c.speed !== 1 ? ` · ${c.speed}×` : ''}
+      </span>
+      {!locked && <>
+        <span className="trim" onPointerDown={(e) => onDown(e, 'trimL')} style={{ left: 0 }} />
+        <span className="trim" onPointerDown={(e) => onDown(e, 'trimR')} style={{ right: 0 }} />
+      </>}
+    </div>
   );
 }
 

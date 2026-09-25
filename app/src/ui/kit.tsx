@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { X, Pipette } from 'lucide-react';
 import { useApp } from '../store/app';
 
 export function Switch({ on, onChange, label }: { on: boolean; onChange(v: boolean): void; label?: string }) {
@@ -83,6 +83,11 @@ export function ColorRow({ colors, value, onPick, size = 28 }: { colors: string[
         +
         <input type="color" value={value && /^#[0-9a-f]{6}$/i.test(value) ? value : '#888888'} onChange={(e) => onPick(e.target.value.toUpperCase())} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }} />
       </label>
+      {'EyeDropper' in window && (
+        <button type="button" title="Pipette" aria-label="Pipette" onClick={async () => {
+          try { const r = await new (window as unknown as { EyeDropper: new () => { open(): Promise<{ sRGBHex: string }> } }).EyeDropper().open(); onPick(r.sRGBHex.toUpperCase()); } catch { /* cancelled */ }
+        }} style={{ width: size, height: size, borderRadius: 10, border: '1px dashed var(--line2)', background: 'transparent', color: 'var(--tx2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}><Pipette size={13} /></button>
+      )}
     </div>
   );
 }

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Image as ImageIcon, Palette, Shapes, Type, WandSparkles, Upload } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useDesign } from './store';
-import { addImageFromMedia, addShape, addText, setImageMedia, updateEls, setPageBg, insertComponent } from './actions';
+import { addImageFromMedia, addShape, addText, setImageMedia, updateEls, setPageBg, insertComponent, addVector } from './actions';
+import { SHAPES, shapePath } from './shapes';
 import { importFiles, listMedia, onMediaChange } from '../lib/media';
 import type { MediaItem } from '../model/types';
 import { getSample, sampleErrorText } from '../lib/claude';
@@ -96,6 +97,11 @@ function ShapesTab() {
         {shapes.map((s) => (
           <button key={s.id} onClick={() => addShape(s.id)} style={{ height: 64, borderRadius: 10, border: '1px solid transparent', background: 'var(--panel2)', fontSize: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <span style={{ width: s.w, height: s.h, borderRadius: s.r, background: 'var(--tx2)' }} />{s.label}
+          </button>
+        ))}
+        {SHAPES.map((x) => (
+          <button key={x.k} onClick={() => addVector(x.k)} title={T(x.fr, x.en)} style={{ height: 64, borderRadius: 10, border: '1px solid transparent', background: 'var(--panel2)', fontSize: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <svg width={30} height={30 * x.ratio} viewBox={`0 0 30 ${30 * x.ratio}`} aria-hidden><path d={shapePath(x.k, 30, 30 * x.ratio)} fill="var(--tx2)" /></svg>{T(x.fr, x.en)}
           </button>
         ))}
       </div>

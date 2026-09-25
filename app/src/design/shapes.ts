@@ -1,0 +1,63 @@
+import type { ImgAdjust, ShapeKind } from '../model/types';
+
+// Vector shapes as SVG path data in the element's own box, shared by the DOM view (<path d>)
+// and the canvas renderer (Path2D), so the canvas and exports always match.
+
+const f = (n: number) => Math.round(n * 100) / 100;
+
+function poly(pts: [number, number][]) {
+  return 'M' + pts.map(([x, y]) => `${f(x)} ${f(y)}`).join(' L') + ' Z';
+}
+
+export function shapePath(kind: ShapeKind, w: number, h: number): string {
+  switch (kind) {
+    case 'triangle': return poly([[w / 2, 0], [w, h], [0, h]]);
+    case 'diamond': return poly([[w / 2, 0], [w, h / 2], [w / 2, h], [0, h / 2]]);
+    case 'hexagon': return poly([[w * 0.25, 0], [w * 0.75, 0], [w, h / 2], [w * 0.75, h], [w * 0.25, h], [0, h / 2]]);
+    case 'star':
+    case 'burst': {
+      const n = kind === 'star' ? 5 : 12, inner = kind === 'star' ? 0.42 : 0.72;
+      const pts: [number, number][] = [];
+      for (let i = 0; i < n * 2; i++) {
+        const r = i % 2 ? inner : 1;
+        const a = -Math.PI / 2 + (i * Math.PI) / n;
+        pts.push([w / 2 + (Math.cos(a) * r * w) / 2, h / 2 + (Math.sin(a) * r * h) / 2]);
+      }
+      return poly(pts);
+    }
+    case 'arrow': return poly([[0, h * 0.3], [w * 0.62, h * 0.3], [w * 0.62, 0], [w, h / 2], [w * 0.62, h], [w * 0.62, h * 0.7], [0, h * 0.7]]);
+    case 'heart':
+      return `M${f(w / 2)} ${f(h)} C${f(w * 0.15)} ${f(h * 0.72)} 0 ${f(h * 0.48)} 0 ${f(h * 0.28)} C0 ${f(h * 0.1)} ${f(w * 0.14)} 0 ${f(w * 0.28)} 0 C${f(w * 0.38)} 0 ${f(w * 0.46)} ${f(h * 0.06)} ${f(w / 2)} ${f(h * 0.16)} C${f(w * 0.54)} ${f(h * 0.06)} ${f(w * 0.62)} 0 ${f(w * 0.72)} 0 C${f(w * 0.86)} 0 ${f(w)} ${f(h * 0.1)} ${f(w)} ${f(h * 0.28)} C${f(w)} ${f(h * 0.48)} ${f(w * 0.85)} ${f(h * 0.72)} ${f(w / 2)} ${f(h)} Z`;
+    case 'bubble': {
+      const r = Math.min(w, h) * 0.18, b = h * 0.78;
+      return `M${f(r)} 0 H${f(w - r)} Q${f(w)} 0 ${f(w)} ${f(r)} V${f(b - r)} Q${f(w)} ${f(b)} ${f(w - r)} ${f(b)} H${f(w * 0.42)} L${f(w * 0.2)} ${f(h)} L${f(w * 0.26)} ${f(b)} H${f(r)} Q0 ${f(b)} 0 ${f(b - r)} V${f(r)} Q0 0 ${f(r)} 0 Z`;
+    }
+  }
+}
+
+export const SHAPES: { k: ShapeKind; fr: string; en: string; ratio: number }[] = [
+  { k: 'triangle', fr: 'Triangle', en: 'Triangle', ratio: 1 },
+  { k: 'diamond', fr: 'Losange', en: 'Diamond', ratio: 1 },
+  { k: 'hexagon', fr: 'Hexagone', en: 'Hexagon', ratio: 0.87 },
+  { k: 'star', fr: 'Étoile', en: 'Star', ratio: 1 },
+  { k: 'burst', fr: 'Badge', en: 'Burst', ratio: 1 },
+  { k: 'arrow', fr: 'Flèche', en: 'Arrow', ratio: 0.5 },
+  { k: 'heart', fr: 'Cœur', en: 'Heart', ratio: 0.9 },
+  { k: 'bubble', fr: 'Bulle', en: 'Speech bubble', ratio: 0.75 },
+];
+
+// CSS / canvas filter string for image adjustments (the same syntax works for both).
+// Blur is expressed in page pixels (0..100 → 0..24 px) and converted by the caller's unit.
+export function adjFilter(a: ImgAdjust | undefined, blurLen: (pagePx: number) => string): string | undefined {
+  if (!a) return undefined;
+  const parts: string[] = [];
+  if (a.bri) parts.push(`brightness(${1 + a.bri / 100})`);
+  if (a.con) parts.push(`contrast(${1 + a.con / 100})`);
+  if (a.sat) parts.push(`saturate(${1 + a.sat / 100})`);
+  if (a.hue) parts.push(`hue-rotate(${Math.round(a.hue * 1.8)}deg)`);
+  if (a.gray) parts.push(`grayscale(${a.gray / 100})`);
+  if (a.blur) parts.push(`blur(${blurLen((a.blur / 100) * 24)})`);
+  return parts.length ? parts.join(' ') : undefined;
+}
+
+export const lsEm = (ls: number | undefined) => (ls ?? -10) / 1000;

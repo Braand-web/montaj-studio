@@ -6,6 +6,7 @@ import { fontCss } from '../model/fonts';
 import { addImageFromMedia, setImageMedia } from './actions';
 import { importFiles } from '../lib/media';
 import { useApp, tNow } from '../store/app';
+import { lsEm } from './shapes';
 
 type Drag =
   | { kind: 'move'; start: { x: number; y: number }; orig: Map<string, { x: number; y: number }>; moved: boolean }
@@ -18,8 +19,10 @@ const HANDLES: [number, number, string][] = [
   [1, 0, 'ew-resize'], [-1, 0, 'ew-resize'], [0, -1, 'ns-resize'], [0, 1, 'ns-resize'],
 ];
 
-export function Canvas({ page, readOnly, changed, commentMode, onCanvasClick, children }: {
+export function Canvas({ page, readOnly, changed, commentMode, onCanvasClick, children, zoom = 1, onContext }: {
   page: Page;
+  zoom?: number;
+  onContext?: (e: React.MouseEvent, onEl: boolean) => void;
   readOnly?: boolean;
   changed?: string[];
   commentMode?: boolean;
@@ -60,17 +63,24 @@ export function Canvas({ page, readOnly, changed, commentMode, onCanvasClick, ch
         const bw = Math.max(...els.map((x) => d.orig.get(x.id)!.x + x.w)) - Math.min(...els.map((x) => d.orig.get(x.id)!.x));
         const bh = Math.max(...els.map((x) => d.orig.get(x.id)!.y + x.h)) - Math.min(...els.map((x) => d.orig.get(x.id)!.y));
         const th = 7 / p.s;
-        let gv = false, gh = false;
+        const gx: number[] = [], gy: number[] = [];
         if (!e.altKey) {
-          const cx = bx + bw / 2, cy = by + bh / 2;
-          if (Math.abs(cx - page.w / 2) < th) { dx += page.w / 2 - cx; gv = true; }
-          else if (Math.abs(bx) < th) dx -= bx;
-          else if (Math.abs(bx + bw - page.w) < th) dx += page.w - (bx + bw);
-          if (Math.abs(cy - page.h / 2) < th) { dy += page.h / 2 - cy; gh = true; }
-          else if (Math.abs(by) < th) dy -= by;
-          else if (Math.abs(by + bh - page.h) < th) dy += page.h - (by + bh);
+          // Snap the selection's left/center/right (top/middle/bottom) to the page and to other elements.
+          const others = st.page().els.filter((x) => !ids.includes(x.id) && !x.hidden);
+          const cxs = [0, page.w / 2, page.w, ...others.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w])];
+          const cys = [0, page.h / 2, page.h, ...others.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h])];
+          const best = (edges: number[], cands: number[]) => {
+            let d = Infinity;
+            for (const ed of edges) for (const c of cands) if (Math.abs(c - ed) < Math.abs(d)) d = c - ed;
+            return Math.abs(d) < th ? d : 0;
+          };
+          const sx = best([bx, bx + bw / 2, bx + bw], cxs), sy = best([by, by + bh / 2, by + bh], cys);
+          dx += sx; dy += sy;
+          const nbx = bx + sx, nby = by + sy;
+          for (const ed of [nbx, nbx + bw / 2, nbx + bw]) if (cxs.some((c) => Math.abs(c - ed) < 0.5)) gx.push(ed);
+          for (const ed of [nby, nby + bh / 2, nby + bh]) if (cys.some((c) => Math.abs(c - ed) < 0.5)) gy.push(ed);
         }
-        if (gv !== st.guides.v || gh !== st.guides.h) st.setGuides({ v: gv, h: gh });
+        if (gx.join() !== st.guides.xs.join() || gy.join() !== st.guides.ys.join()) st.setGuides({ xs: gx, ys: gy });
         st.live((data) => {
           const pg = data.pages[st.pageIdx];
           for (const el of pg.els) {
@@ -130,7 +140,7 @@ export function Canvas({ page, readOnly, changed, commentMode, onCanvasClick, ch
         setMarquee(null);
         return;
       }
-      st.setGuides({ v: false, h: false });
+      st.setGuides({ xs: [], ys: [] });
       st.end();
     };
     window.addEventListener('pointermove', move);
@@ -211,11 +221,19 @@ export function Canvas({ page, readOnly, changed, commentMode, onCanvasClick, ch
     <div
       ref={boxRef}
       onPointerDown={onBgDown}
+      onContextMenu={(e) => {
+        if (readOnly || !onContext) return;
+        e.preventDefault();
+        const id = (e.target as HTMLElement).closest('[data-id]')?.getAttribute('data-id');
+        const st = useDesign.getState();
+        if (id && !st.sel.includes(id)) st.select([id]);
+        onContext(e, !!id);
+      }}
       onDragOver={(e) => { e.preventDefault(); if (!readOnly) setDropHint(true); }}
       onDragLeave={() => setDropHint(false)}
       onDrop={onDrop}
       style={{
-        position: 'relative', width: `min(100cqw, calc(100cqh * ${page.w / page.h}))`, aspectRatio: `${page.w}/${page.h}`,
+        position: 'relative', width: `calc(min(100cqw, 100cqh * ${page.w / page.h}) * ${zoom})`, aspectRatio: `${page.w}/${page.h}`, margin: 'auto', flex: 'none',
         background: page.bg, containerType: 'inline-size', boxShadow: '0 0 0 1px var(--line2), 0 12px 40px rgba(0,0,0,.25)',
         cursor: commentMode ? 'crosshair' : undefined,
         outline: dropHint ? '2px dashed var(--acc)' : undefined, outlineOffset: 4,
@@ -253,7 +271,7 @@ export function Canvas({ page, readOnly, changed, commentMode, onCanvasClick, ch
             transform: editEl.rot ? `rotate(${editEl.rot}deg)` : undefined, background: 'rgba(10,132,255,.08)', border: 0, outline: '1.5px solid var(--acc)',
             padding: 0, margin: 0, resize: 'none', overflow: 'hidden', color: editEl.color, fontFamily: fontCss(editEl.font),
             fontSize: `${((editEl.size ?? 48) / page.w) * 100}cqw`, fontWeight: editEl.weight ?? 700, lineHeight: editEl.lh ?? 1.1,
-            letterSpacing: '-.01em', textAlign: editEl.align ?? 'left', textTransform: editEl.upper ? 'uppercase' : undefined,
+            letterSpacing: `${lsEm(editEl.ls)}em`, fontStyle: editEl.italic ? 'italic' : undefined, textAlign: editEl.align ?? 'left', textTransform: editEl.upper ? 'uppercase' : undefined,
           }}
         />
       )}
@@ -271,8 +289,8 @@ export function Canvas({ page, readOnly, changed, commentMode, onCanvasClick, ch
         return <div style={{ position: 'absolute', left: pctX(x), top: pctY(y), width: pctX(r - x), height: pctY(b - y), outline: '1px dashed var(--acc)', outlineOffset: 4, pointerEvents: 'none' }} />;
       })()}
       {marquee && <div style={{ position: 'absolute', left: pctX(marquee.x), top: pctY(marquee.y), width: pctX(marquee.w), height: pctY(marquee.h), background: 'rgba(10,132,255,.12)', border: '1px solid var(--acc)', pointerEvents: 'none' }} />}
-      {guides.v && <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, background: '#FF3DA5', pointerEvents: 'none' }} />}
-      {guides.h && <div style={{ position: 'absolute', left: 0, right: 0, top: '50%', height: 1, background: '#FF3DA5', pointerEvents: 'none' }} />}
+      {guides.xs.map((x) => <div key={'x' + x} style={{ position: 'absolute', top: 0, bottom: 0, left: pctX(x), width: 1, background: '#FF3DA5', pointerEvents: 'none', zIndex: 6 }} />)}
+      {guides.ys.map((y) => <div key={'y' + y} style={{ position: 'absolute', left: 0, right: 0, top: pctY(y), height: 1, background: '#FF3DA5', pointerEvents: 'none', zIndex: 6 }} />)}
       {children}
     </div>
   );

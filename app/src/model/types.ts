@@ -1,6 +1,8 @@
 // Document model shared by the design and video editors (SPEC §3.1, §3.4).
 
-export type ElType = 'text' | 'rect' | 'circle' | 'line' | 'image' | 'chart' | 'table' | 'qr';
+export type ElType = 'text' | 'rect' | 'circle' | 'line' | 'image' | 'chart' | 'table' | 'qr' | 'shape';
+export type ShapeKind = 'triangle' | 'diamond' | 'hexagon' | 'star' | 'arrow' | 'heart' | 'bubble' | 'burst';
+export interface ImgAdjust { bri?: number; con?: number; sat?: number; blur?: number; gray?: number; hue?: number } // -100..100, blur/gray 0..100
 export type Anim = 'none' | 'fade' | 'slide' | 'zoom' | 'pop';
 export type FontKey = 'sans' | 'serif' | 'mono' | 'anton' | 'archivo' | 'bebas' | 'caveat' | 'dmserif' | 'montserrat' | 'playfair';
 
@@ -11,6 +13,8 @@ export interface El {
   x: number; y: number; w: number; h: number;
   rot?: number;
   opacity?: number;
+  flipX?: boolean;
+  flipY?: boolean;
   hidden?: boolean;
   locked?: boolean;
   groupId?: string;
@@ -24,6 +28,8 @@ export interface El {
   align?: 'left' | 'center' | 'right';
   lh?: number;
   upper?: boolean;
+  italic?: boolean;
+  ls?: number; // letter spacing in thousandths of an em
   fx?: { shadow?: boolean; outline?: boolean; bg?: boolean };
   // shapes
   fill?: string;
@@ -33,6 +39,9 @@ export interface El {
   // image
   mediaId?: string;
   fit?: 'cover' | 'contain';
+  adj?: ImgAdjust;
+  // vector shapes
+  shape?: ShapeKind;
   // chart / table / qr
   data?: [string, number][];
   kind?: 'col' | 'bar';

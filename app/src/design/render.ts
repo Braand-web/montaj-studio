@@ -3,6 +3,7 @@ import { fontCss } from '../model/fonts';
 import { prims } from './prims';
 import { loadImage, mediaUrl } from '../lib/media';
 import { clamp, lum } from '../lib/util';
+import { adjFilter, lsEm, shapePath } from './shapes';
 
 // Canvas renderer for exports and thumbnails (SPEC §3.8): same layout rules as the DOM view.
 
@@ -76,6 +77,7 @@ export async function drawEl(ctx: CanvasRenderingContext2D, el: El, t?: number) 
   ctx.translate(cx, cy);
   if (el.rot) ctx.rotate((el.rot * Math.PI) / 180);
   if (a.sc !== 1) ctx.scale(a.sc, a.sc);
+  if (el.flipX || el.flipY) ctx.scale(el.flipX ? -1 : 1, el.flipY ? -1 : 1);
   ctx.translate(-el.w / 2, -el.h / 2);
   const { w, h } = el;
   switch (el.type) {
@@ -104,7 +106,11 @@ export async function drawEl(ctx: CanvasRenderingContext2D, el: El, t?: number) 
         const fit = el.fit ?? 'cover';
         const s = fit === 'cover' ? Math.max(w / im.naturalWidth, h / im.naturalHeight) : Math.min(w / im.naturalWidth, h / im.naturalHeight);
         const dw = im.naturalWidth * s, dh = im.naturalHeight * s;
+        const k = ctx.getTransform().a || 1;
+        const filt = adjFilter(el.adj, (px) => `${Math.abs(px * k)}px`);
+        if (filt) ctx.filter = filt;
         ctx.drawImage(im, (w - dw) / 2, (h - dh) / 2, dw, dh);
+        ctx.filter = 'none';
       } else {
         ctx.fillStyle = '#2A2D31';
         ctx.fillRect(0, 0, w, h);
@@ -116,8 +122,8 @@ export async function drawEl(ctx: CanvasRenderingContext2D, el: El, t?: number) 
       const size = el.size ?? 48;
       const lh = (el.lh ?? 1.1) * size;
       const ink = textInk(el);
-      ctx.font = `${el.weight ?? 700} ${size}px ${fontCss(el.font)}`;
-      try { (ctx as unknown as { letterSpacing: string }).letterSpacing = `${-0.01 * size}px`; } catch { /* older engines */ }
+      ctx.font = `${el.italic ? 'italic ' : ''}${el.weight ?? 700} ${size}px ${fontCss(el.font)}`;
+      try { (ctx as unknown as { letterSpacing: string }).letterSpacing = `${lsEm(el.ls) * size}px`; } catch { /* older engines */ }
       const raw = el.upper ? (el.text ?? '').toUpperCase() : el.text ?? '';
       const lines = wrapText(ctx, raw, w);
       if (el.fx?.bg) {
@@ -141,6 +147,13 @@ export async function drawEl(ctx: CanvasRenderingContext2D, el: El, t?: number) 
         ctx.fillStyle = ink;
         ctx.fillText(ln, x, y);
       });
+      break;
+    }
+    case 'shape': {
+      const path = new Path2D(shapePath(el.shape ?? 'star', w, h));
+      ctx.fillStyle = el.fill ?? '#FFD23F';
+      ctx.fill(path);
+      if (el.stroke && el.strokeW) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.strokeW; ctx.lineJoin = 'round'; ctx.stroke(path); }
       break;
     }
     case 'chart':

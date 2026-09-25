@@ -17,7 +17,8 @@ interface DesignState {
   draft: DesignData | null; // Assist-mode proposal shown on a copy
   changed: string[]; // element ids touched by the assistant
   busy: boolean; // assistant is editing in Agent mode
-  guides: { v: boolean; h: boolean };
+  guides: { xs: number[]; ys: number[] };
+  zoom: number; // 1 = fit the page to the stage
   load(doc: Doc<DesignData>): void;
   data(): DesignData;
   page(): Page;
@@ -32,7 +33,8 @@ interface DesignState {
   rename(name: string): void;
   setDraft(d: DesignData | null, changed?: string[]): void;
   setBusy(b: boolean): void;
-  setGuides(g: { v: boolean; h: boolean }): void;
+  setGuides(g: { xs: number[]; ys: number[] }): void;
+  setZoom(z: number): void;
   flush(): Promise<void>;
 }
 
@@ -61,9 +63,9 @@ export const useDesign = create<DesignState>((set, get) => {
     thumb(next);
   };
   return {
-    doc: null, pageIdx: 0, sel: [], past: [], future: [], draft: null, changed: [], busy: false, guides: { v: false, h: false },
+    doc: null, pageIdx: 0, sel: [], past: [], future: [], draft: null, changed: [], busy: false, guides: { xs: [], ys: [] }, zoom: 1,
     load(doc) {
-      set({ doc, pageIdx: 0, sel: [], past: [], future: [], draft: null, changed: [], busy: false });
+      set({ doc, pageIdx: 0, sel: [], past: [], future: [], draft: null, changed: [], busy: false, zoom: 1 });
     },
     data() { return get().doc!.data; },
     page() {
@@ -138,6 +140,7 @@ export const useDesign = create<DesignState>((set, get) => {
     setDraft(d, changed = []) { set({ draft: d, changed, sel: [] }); },
     setBusy(b) { set({ busy: b }); },
     setGuides(g) { set({ guides: g }); },
+    setZoom(z) { set({ zoom: Math.round(Math.max(0.25, Math.min(4, z)) * 100) / 100 }); },
     async flush() {
       const doc = get().doc;
       if (doc) { persist.flush(doc); }

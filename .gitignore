@@ -6,3 +6,4 @@ cloudflare/
 smoke*.log
 site-marketing-*
 app/scripts/shot*.png
+preview/

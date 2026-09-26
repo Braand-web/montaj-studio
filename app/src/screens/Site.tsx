@@ -77,7 +77,7 @@ export function Site() {
     return () => { clearInterval(iv); el.removeEventListener('scroll', onScroll); io?.disconnect(); anims.forEach((a) => a.cancel()); };
   }, [lang]);
 
-  const heroWords = lang === 'fr' ? ['Décris-le,', 'monte-le,', 'publie-le.'] : ['Describe it,', 'edit it,', 'publish it.'];
+  const heroWords = lang === 'fr' ? ['Éditeur vidéo', 'et design', 'en ligne gratuit.'] : ['Free online', 'video and design', 'editor.'];
   const prompts = lang === 'fr'
     ? ['Affiche pour ma soirée de lancement, samedi 18 h', 'Story Instagram pour les soldes de ma boutique', '3 miniatures YouTube pour ma vidéo de test', 'Vidéo verticale avec un titre accrocheur']
     : ['Poster for my launch party, Saturday 6 pm', 'Instagram story for my shop’s sale', '3 YouTube thumbnails for my review video', 'Vertical video with a catchy title'];
@@ -173,7 +173,7 @@ export function Site() {
         <h1 className="site-h1 z1">
           {heroWords.map((w, i) => <span key={w} data-w="1" style={i === 2 ? { background: 'linear-gradient(90deg,#0A84FF,#BF5AF2 55%,#FF375F)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' } : undefined}>{w}</span>)}
         </h1>
-        <p data-rise="1" className="site-lead z1">{T('Montaj Studio réunit un éditeur vidéo, un éditeur de design et une IA qui crée pour toi, dans le navigateur. Gratuit, sans filigrane.', 'Montaj Studio brings a video editor, a design editor and an AI that creates for you together, in the browser. Free, no watermark.')}</p>
+        <p data-rise="1" className="site-lead z1">{T('Monte des vidéos avec titres et sous-titres, ou crée des visuels et des miniatures dans ton navigateur. Les deux éditeurs sont gratuits et sans filigrane.', 'Edit videos with titles and captions, or create graphics and thumbnails in your browser. Both editors are free and watermark-free.')}</p>
         <div data-rise="2" className="row wrap z1" style={{ gap: 10, justifyContent: 'center' }}>
           <button className="site-btn primary" onClick={start}>{T('Commencer gratuitement', 'Start for free')}<ArrowRight size={17} /></button>
           <button className="site-btn soft" onClick={() => go('chat')}><Sparkles size={16} color="#BF5AF2" />{T('Essayer Studio Chat', 'Try Studio Chat')}</button>

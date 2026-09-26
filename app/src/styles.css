@@ -344,3 +344,14 @@ input[type=color] { width: 28px; height: 28px; padding: 0; border: 1px solid var
 .link-card[data-status="analyzing"] { border-color: var(--accTx); }
 .link-img { width: 52px; height: 38px; border-radius: 8px; background: center/cover no-repeat var(--line2); flex: none; }
 .drop-hint { position: absolute; inset: 0; z-index: 20; border-radius: inherit; border: 2px dashed var(--acc); background: color-mix(in oklab, var(--acc) 10%, transparent); display: flex; align-items: center; justify-content: center; font-weight: 600; pointer-events: none; }
+
+.seo-fallback { height: 100%; overflow: auto; padding: 32px 24px; background: #111113; color: #F5F5F7; font-family: var(--sans); }
+.seo-fallback > * { width: 100%; max-width: 840px; margin-inline: auto; }
+.seo-fallback-hero { min-height: 360px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 16px; }
+.seo-fallback-brand { color: #8E8E93; font-size: 14px; }
+.seo-fallback h1 { max-width: 680px; margin: 0; font-size: 48px; line-height: 1; letter-spacing: -.04em; text-wrap: balance; }
+.seo-fallback h2 { margin: 0 0 12px; font-size: 24px; line-height: 1.25; }
+.seo-fallback h3 { margin: 24px 0 8px; font-size: 16px; }
+.seo-fallback p { max-width: 680px; color: #AEAEB2; font-size: 18px; line-height: 1.5; text-wrap: pretty; }
+.seo-fallback a { display: inline-block; border-radius: 999px; padding: 8px 16px; background: #0071E3; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; }
+.seo-fallback section:not(.seo-fallback-hero) { padding: 32px 0; border-top: 1px solid #313131; }

@@ -103,6 +103,8 @@ export function sampleErrorText(code: string | undefined, fr: boolean): string {
       return fr ? 'Le modèle Avancé est inclus dans les formules Pro et Équipe. Choisis Équilibré ou change de formule.' : 'The Advanced model comes with the Pro and Team plans. Pick Balanced or upgrade.';
     case 'daily_cap':
       return fr ? 'Limite de requêtes IA du jour atteinte pour ta formule. Réessaie demain ou passe à une formule supérieure.' : 'Daily AI request limit reached for your plan. Try again tomorrow or upgrade.';
+    case 'own_key_invalid':
+      return fr ? 'Ta clé Anthropic a été refusée (invalide, révoquée ou sans crédit). Vérifie-la dans Fournisseurs IA.' : 'Your Anthropic key was refused (invalid, revoked or out of credit). Check it in AI providers.';
     case 'billing_unavailable':
       return fr ? 'La facturation du serveur n’est pas configurée.' : 'Server billing is not configured.';
     case 'budget':

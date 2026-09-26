@@ -67,7 +67,7 @@ jobs:
             ANTHROPIC_API_KEY
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      - name: Stripe secrets (only when set)
+      - name: Stripe and key-vault secrets (only when set)
         if: steps.secrets.outputs.deploy == 'true'
         working-directory: server
         env:
@@ -75,7 +75,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          KEYS_SECRET: ${{ secrets.KEYS_SECRET }}
         run: |
-          for k in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
+          for k in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET KEYS_SECRET; do
             if [ -n "${!k}" ]; then printf '%s' "${!k}" | npx wrangler secret put "$k"; fi
           done

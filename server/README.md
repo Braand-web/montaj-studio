@@ -74,10 +74,16 @@ La tarification vit dans `app/src/lib/pricing.ts`, une seule source pour l'affic
   | Pro | 19,99 €/mois | 3 000 | 600 |
   | Équipe | 12 € par siège et par mois, 3 sièges min. | 2 000 par siège | 600 par siège |
 
+  Les prix en FCFA suivent le taux fixe : 1 € = 655,957 FCFA, arrondi à 50 FCFA. Le calcul se fait par `xofOf()` dans `pricing.ts`. Pro et Équipe incluent les clés personnelles et le modèle Avancé. Une analyse de lien explore 0 page interne en Gratuit, 3 en Créateur et 5 en Pro et Équipe.
+
   Les formules Gratuit et Créateur n'ont pas le modèle Avancé.
 - **Packs :** 500 crédits à 5 €, 1 100 à 10 €, 3 000 à 25 €. Valables 365 jours, utilisés après les crédits du mois.
 - **Portefeuille :** en attendant les comptes, chaque appareil a un portefeuille (en-tête `x-montaj-wallet`, identifiant aléatoire stocké dans le navigateur). Les tables D1 sont `wallets`, `ledger`, `purchases` et `daily`. La colonne `owner_user_id` est réservée pour rattacher un portefeuille à un compte Supabase ; le SQL est portable vers Postgres.
 - **Anti-abus :** 3 nouveaux portefeuilles crédités par IP et par jour. Au-delà, le portefeuille est créé sans crédits offerts, pour ne pas bloquer les réseaux mobiles partagés.
+
+### Clés personnelles (Pro et Équipe)
+
+Les abonnés Pro et Équipe peuvent enregistrer leur propre clé Anthropic (Fournisseurs IA → Claude). Elle est chiffrée en AES-256-GCM avec une clé dérivée du secret `KEYS_SECRET` et liée au portefeuille. Seuls ses 4 derniers caractères sont renvoyés. Leurs requêtes IA passent alors par cette clé : elles ne consomment aucun crédit mais restent dans la limite de requêtes par jour. Pour l'activer, ajoute au Worker un secret `KEYS_SECRET` d'au moins 32 caractères aléatoires, par exemple `openssl rand -base64 48`. Ne le change plus ensuite : les clés déjà enregistrées deviendraient illisibles. Les autres fournisseurs (OpenAI, fal.ai, ElevenLabs…) viendront avec les générations d'images, de vidéos et de voix.
 
 ### Activer Stripe
 

@@ -72,12 +72,12 @@ export async function getWallet(env: BillingEnv, id: string, ip: string): Promis
 }
 
 // Before an AI call: plan allows the tier, daily cap not reached, enough credits to start.
-export async function authorize(env: BillingEnv, w: Wallet, tier: Tier): Promise<void> {
+export async function authorize(env: BillingEnv, w: Wallet, tier: Tier, ownKey = false): Promise<void> {
   const plan = planOf(w.plan);
   if (!plan.tiers.includes(tier)) throw new BillingError('plan_required', 'Le modèle Avancé est inclus dans les formules Pro et Équipe', 402);
   const n = await peek(env.DB!, w.id);
   if (n >= plan.dailyRequests * (plan.perSeat ? w.seats : 1)) throw new BillingError('daily_cap', `Limite de ${plan.dailyRequests} requêtes IA par jour atteinte pour la formule ${plan.fr}`, 429);
-  if (w.sub_credits + w.pack_credits < MIN_TO_START[tier]) throw new BillingError('insufficient_credits', 'Crédits insuffisants : recharge ou change de formule', 402);
+  if (!ownKey && w.sub_credits + w.pack_credits < MIN_TO_START[tier]) throw new BillingError('insufficient_credits', 'Crédits insuffisants : recharge ou change de formule', 402);
   await bump(env.DB!, w.id);
 }
 

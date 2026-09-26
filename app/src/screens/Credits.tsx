@@ -5,7 +5,7 @@ import { PageHead } from '../ui/kit';
 import { useUsage } from '../lib/usage';
 import { backend, type BackendInfo } from '../lib/attach/backend';
 import { useWallet, startCheckout, openPortal, takeCheckoutReturn } from '../lib/wallet';
-import { PLANS, PACKS, TYPICAL, PACK_VALIDITY_DAYS, planOf, type PlanId } from '../lib/pricing';
+import { PLANS, PACKS, TYPICAL, PACK_VALIDITY_DAYS, COMPARE, planOf, xofOf, type PlanId } from '../lib/pricing';
 
 // Plans and credits. Hosted version: a credit wallet on the Montaj server (Stripe Checkout),
 // metered on the real tokens of each AI call. Inside claude.ai: AI runs on the viewer's own
@@ -15,7 +15,8 @@ const COLOR: Record<PlanId, string> = { free: '#30D158', creator: '#FF9F0A', pro
 const ICON = { free: Sparkle, creator: Sparkles, pro: Crown, team: Users };
 const eur = (n: number, fr: boolean) => n.toLocaleString(fr ? 'fr-FR' : 'en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: n % 1 ? 2 : 0 });
 const xof = (n: number) => n.toLocaleString('fr-FR') + ' FCFA';
-const KIND: Record<string, [string, string]> = { ai: ['IA', 'AI'], grant: ['Crédits offerts', 'Free credits'], refill: ['Recharge mensuelle', 'Monthly refill'], purchase: ['Pack acheté', 'Pack bought'], plan: ['Formule', 'Plan'], scrape: ['Analyse de lien', 'Link analysis'], transcribe: ['Transcription', 'Transcription'], expire: ['Expiration', 'Expired'] };
+const r50 = (n: number) => Math.round(n / 50) * 50;
+const KIND: Record<string, [string, string]> = { ai: ['IA', 'AI'], grant: ['Crédits offerts', 'Free credits'], refill: ['Recharge mensuelle', 'Monthly refill'], purchase: ['Pack acheté', 'Pack bought'], plan: ['Formule', 'Plan'], scrape: ['Analyse de lien', 'Link analysis'], transcribe: ['Transcription', 'Transcription'], expire: ['Expiration', 'Expired'], byok: ['IA avec ta clé', 'AI with your key'] };
 
 export function Credits() {
   const T = useT();
@@ -135,21 +136,31 @@ export function Credits() {
                 <span style={{ fontSize: 17, fontWeight: 700 }}>{fr ? p.fr : p.en}</span>
                 {p.id === 'pro' && <span className="pill" style={{ marginLeft: 'auto' }}>{T('Populaire', 'Popular')}</span>}
               </div>
+              <span className="muted" style={{ fontSize: 12, marginTop: -6 }}>{fr ? p.tagFr : p.tagEn}</span>
               <div className="col" style={{ gap: 2 }}>
-                <div className="row" style={{ alignItems: 'baseline', gap: 6 }}>
+                <div className="row" style={{ alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-.03em' }}>{eur(Math.round(price * 100) / 100, fr)}</span>
                   <span className="muted" style={{ fontSize: 12 }}>{p.perSeat ? T('/ siège / mois', '/ seat / month') : T('/ mois', '/ month')}</span>
                 </div>
-                {p.xofMonth > 0 && <span className="faint" style={{ fontSize: 11 }}>{T('ou', 'or')} {xof(p.xofMonth)}{T(' / mois', ' / month')}{p.perSeat ? T(' / siège', ' / seat') : ''}{yearly ? ` · ${eur(p.eurYear, fr)} ${T('facturé par an', 'billed yearly')}` : ''}</span>}
+                <div className="row" style={{ alignItems: 'baseline', gap: 6 }}>
+                  <span className="tnum" style={{ fontSize: 18, fontWeight: 700 }}>{xof(yearly ? r50(xofOf(p.eurYear) / 12) : xofOf(p.eurMonth))}</span>
+                  <span className="muted" style={{ fontSize: 12 }}>{p.perSeat ? T('/ siège / mois', '/ seat / month') : T('/ mois', '/ month')}</span>
+                </div>
+                {yearly && p.eurYear > 0 && <span className="faint" style={{ fontSize: 11 }}>{T('Facturé', 'Billed')} {eur(p.eurYear, fr)} · {xof(xofOf(p.eurYear))} {T('par an', 'per year')}{p.perSeat ? T(' et par siège', ' per seat') : ''}</span>}
               </div>
               <div className="col" style={{ gap: 7 }}>
-                {p.features.map((f) => <span key={f.fr} className="row" style={{ gap: 8, fontSize: 13, alignItems: 'flex-start' }}><span style={{ width: 18, height: 18, borderRadius: 9, background: c, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', marginTop: 1 }}><Check size={11} color="#111113" /></span>{fr ? f.fr : f.en}</span>)}
-                <span className="faint" style={{ fontSize: 11 }}>{p.dailyRequests * (p.perSeat ? n : 1)} {T('requêtes IA max. par jour', 'AI requests max per day')}</span>
+                {p.features.map((f) => (
+                  <span key={f.fr} className="row" style={{ gap: 8, fontSize: 13, alignItems: 'flex-start', opacity: f.soon ? 0.7 : 1 }}>
+                    <span style={{ width: 18, height: 18, borderRadius: 9, background: c, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', marginTop: 1 }}><Check size={11} color="#111113" /></span>
+                    <span className="pretty">{fr ? f.fr : f.en}{f.soon && <span className="pill" style={{ marginLeft: 6 }}>{T('bientôt', 'soon')}</span>}</span>
+                  </span>
+                ))}
+                <span className="faint" style={{ fontSize: 11 }}>{fr ? p.support.fr : p.support.en}</span>
               </div>
               {p.perSeat && (
                 <label className="row" style={{ gap: 8, fontSize: 12 }}>{T('Sièges', 'Seats')}
                   <input type="number" min={p.minSeats} max={200} value={seats} onChange={(e) => setSeats(Math.max(p.minSeats ?? 1, Math.min(200, Number(e.target.value) || 0)))} style={{ width: 70 }} className="input" />
-                  <span className="muted">= {eur(Math.round(price * n * 100) / 100, fr)}{T('/mois', '/mo')}</span>
+                  <span className="muted">= {eur(Math.round(price * n * 100) / 100, fr)} · {xof(r50((yearly ? xofOf(p.eurYear) / 12 : xofOf(p.eurMonth)) * n))}{T('/mois', '/mo')}</span>
                 </label>
               )}
               <button disabled={!can || busy === p.id} onClick={() => buy(p.id, { interval: yearly ? 'year' : 'month', seats: p.perSeat ? seats : undefined })}
@@ -161,6 +172,31 @@ export function Credits() {
         })}
       </div>
 
+      <details className="card" style={{ padding: 0, overflow: 'hidden' }} data-compare>
+        <summary style={{ padding: '14px 18px', cursor: 'pointer', fontWeight: 600 }}>{T('Comparer les formules en détail', 'Compare plans in detail')}</summary>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '10px 18px', width: '24%' }} />
+                {PLANS.map((p) => <th key={p.id} style={{ textAlign: 'left', padding: '10px 12px', color: COLOR[p.id] }}>{fr ? p.fr : p.en}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARE.map((row) => (
+                <tr key={row.fr} style={{ borderTop: '1px solid var(--line)' }}>
+                  <td style={{ padding: '9px 18px' }} className="muted">{fr ? row.fr : row.en}</td>
+                  {PLANS.map((p) => {
+                    const v = row.cells(p, fr);
+                    return <td key={p.id} className="tnum" style={{ padding: '9px 12px' }}>{v === true ? <Check size={14} color="#30D158" /> : v === false ? <span className="faint">—</span> : typeof v === 'string' ? v : fr ? v.fr : v.en}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
       <span className="h2">{T('Packs de crédits', 'Credit packs')}</span>
       <span className="muted pretty" style={{ fontSize: 12, marginTop: -8 }}>{T(`Sans abonnement, valables ${PACK_VALIDITY_DAYS} jours, utilisés après les crédits du mois.`, `No subscription, valid for ${PACK_VALIDITY_DAYS} days, used after monthly credits.`)}</span>
       <div className="stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
@@ -169,7 +205,7 @@ export function Credits() {
           return (
             <div key={k.id} className="card col" data-pack={k.id} style={{ padding: 18, gap: 8 }}>
               <span className="tnum" style={{ fontSize: 24, fontWeight: 700 }}>{k.credits.toLocaleString(fr ? 'fr-FR' : 'en-GB')} <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>{T('crédits', 'credits')}</span></span>
-              <span style={{ fontWeight: 600 }}>{eur(k.eur, fr)} <span className="faint" style={{ fontSize: 11, fontWeight: 400 }}>· {xof(k.xof)}</span></span>
+              <span style={{ fontWeight: 600 }}>{eur(k.eur, fr)} <span style={{ fontWeight: 600 }}>· {xof(xofOf(k.eur))}</span></span>
               {k.credits > k.eur * 100 && <span className="pill ok" style={{ alignSelf: 'flex-start' }}>+{Math.round((k.credits / (k.eur * 100) - 1) * 100)} %</span>}
               <button className={can ? 'btn pri' : 'btn'} disabled={!can || busy === k.id} onClick={() => buy(k.id)} style={{ marginTop: 'auto' }}>
                 {busy === k.id ? <Loader2 size={14} className="spin" /> : can ? T('Acheter', 'Buy') : hosted ? T('Paiement bientôt', 'Payment soon') : T('Sur la version web', 'On the web version')}
@@ -179,7 +215,7 @@ export function Credits() {
         })}
       </div>
       <div className="row" style={{ gap: 8, fontSize: 12 }}>
-        <Smartphone size={14} /><span className="muted">{T('Carte bancaire via Stripe. Mobile Money (Orange, MTN, Wave) : bientôt, aux prix en FCFA.', 'Card via Stripe. Mobile Money (Orange, MTN, Wave): coming soon, at the FCFA prices.')}</span>
+        <Smartphone size={14} /><span className="muted">{T('Prix en FCFA au taux fixe (1 € = 655,957 FCFA). Paiement par carte via Stripe, débité en euros ; Mobile Money (Orange, MTN, Wave) arrive bientôt, directement en FCFA.', 'FCFA prices at the fixed peg (€1 = 655.957 FCFA). Card payment via Stripe, charged in euros; Mobile Money (Orange, MTN, Wave) is coming soon, directly in FCFA.')}</span>
       </div>
 
       <span className="h2">{T('Combien coûte une requête ?', 'What does a request cost?')}</span>

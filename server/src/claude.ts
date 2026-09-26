@@ -1,11 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { MODEL_OF, usdCost, creditsFor } from '../../app/src/lib/pricing';
-import { authorize, charge, type BillingEnv, type Wallet } from './billing';
+import { authorize, charge, type Wallet } from './billing';
+import { userKey, type KeysEnv } from './keys';
 
 // One model turn for the app's agent loop (tools execute in the browser, which owns the
 // documents). Streams NDJSON: {"t":"d","d":text} … then {"t":"end",content,stop_reason}.
 
-export interface ClaudeEnv extends BillingEnv { ANTHROPIC_API_KEY?: string; UPLOADS: R2Bucket }
+export interface ClaudeEnv extends KeysEnv { ANTHROPIC_API_KEY?: string; UPLOADS: R2Bucket }
 
 type Tier = 'quick' | 'default' | 'complex';
 interface Body {
@@ -39,10 +40,13 @@ function b64(bytes: Uint8Array) {
 }
 
 export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionContext, wallet: Wallet | null): Promise<Response> {
-  if (!env.ANTHROPIC_API_KEY) throw new ClientError('sampling_disabled', 'ANTHROPIC_API_KEY is not configured on the server', 503);
   const body = validate(raw);
   const tier: Tier = body.tier === 'quick' || body.tier === 'complex' ? body.tier : 'default';
-  if (wallet) await authorize(env, wallet, tier);
+  // Pro and Team can bring their own Anthropic key: the call then runs on it and uses no credits.
+  const own = await userKey(env, wallet, 'anthropic');
+  const apiKey = own ?? env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new ClientError('sampling_disabled', 'ANTHROPIC_API_KEY is not configured on the server', 503);
+  if (wallet) await authorize(env, wallet, tier, !!own);
   const messages = body.messages;
   // PDFs are read natively by Claude (text and scanned pages), attached before the turn's text.
   if (body.documents?.length) {
@@ -59,7 +63,7 @@ export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionCon
     messages[i] = { role: turn.role, content: [...docs, ...content] };
   }
   const cfg = MODELS[tier];
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = new Anthropic({ apiKey });
   const { readable, writable } = new TransformStream();
   const w = writable.getWriter();
   const enc = new TextEncoder();
@@ -84,8 +88,8 @@ export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionCon
       if (wallet) {
         const u = msg.usage;
         const usd = usdCost(msg.model, u);
-        const credits = creditsFor(usd);
-        const w = await charge(env, wallet, credits, 'ai', { model: msg.model, tier, tokens_in: u.input_tokens, tokens_out: u.output_tokens, cache_read: u.cache_read_input_tokens ?? 0, cache_write: u.cache_creation_input_tokens ?? 0, cost_usd: Math.round(usd * 1e6) / 1e6 });
+        const credits = own ? 0 : creditsFor(usd);
+        const w = await charge(env, wallet, credits, own ? 'byok' : 'ai', { model: msg.model, tier, tokens_in: u.input_tokens, tokens_out: u.output_tokens, cache_read: u.cache_read_input_tokens ?? 0, cache_write: u.cache_creation_input_tokens ?? 0, cost_usd: Math.round(usd * 1e6) / 1e6 });
         billing = { credits, balance: w.sub_credits + w.pack_credits };
       }
       await send({ t: 'end', content: msg.content, stop_reason: msg.stop_reason, billing });
@@ -93,7 +97,7 @@ export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionCon
       let code = 'upstream_error';
       if (e instanceof Anthropic.RateLimitError) code = 'rate_limited';
       else if (e instanceof Anthropic.BadRequestError) code = /too long|too large|prompt is too long/i.test(e.message) ? 'prompt_too_large' : 'invalid_request';
-      else if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) code = 'sampling_disabled';
+      else if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) code = own ? 'own_key_invalid' : 'sampling_disabled';
       await send({ t: 'err', code, error: e instanceof Error ? e.message : String(e) }).catch(() => undefined);
     } finally {
       await w.close().catch(() => undefined);

@@ -5,6 +5,9 @@ import { useApp, useT, type AgentMode, type Tier } from '../store/app';
 import { PageHead, Chips } from '../ui/kit';
 import { getSample, sampleErrorText } from '../lib/claude';
 import { tracked } from '../lib/usage';
+import { backend, type BackendInfo } from '../lib/attach/backend';
+import { useWallet, getKeys, saveKey, deleteKey, type KeysInfo } from '../lib/wallet';
+import { planOf } from '../lib/pricing';
 
 export type ClaudeStatus = 'checking' | 'ok' | 'notools' | 'off';
 
@@ -63,12 +66,17 @@ export function Providers() {
     }
   };
   const p = PROVIDERS.find((x) => x.id === pick)!;
+  const [be, setBe] = useState<BackendInfo | null>(null);
+  useEffect(() => { void backend().then(setBe); }, []);
+  const hosted = !!be?.ok;
   return (
     <div className="page narrow screen-in">
-      <PageHead color="#8E8E93" icon={<KeyRound size={19} />} title={T('Fournisseurs IA', 'AI providers')} sub={T('Les modèles qui font tourner l’assistant et les générations. Claude fonctionne déjà avec ton compte ; les autres arriveront avec tes propres clés.', 'The models behind the assistant and generations. Claude already works with your account; the others will come with your own keys.')} />
+      <PageHead color="#8E8E93" icon={<KeyRound size={19} />} title={T('Fournisseurs IA', 'AI providers')} sub={hosted ? T('Les modèles qui font tourner l’assistant et les générations. Claude est inclus dans ta formule ; en Pro et Équipe, tu peux aussi utiliser ta propre clé.', 'The models behind the assistant and generations. Claude is included in your plan; on Pro and Team you can also use your own key.') : T('Les modèles qui font tourner l’assistant et les générations. Claude fonctionne déjà avec ton compte ; les autres arriveront avec tes propres clés.', 'The models behind the assistant and generations. Claude already works with your account; the others will come with your own keys.')} />
       <div className="row" style={{ gap: 12, padding: '12px 14px', borderRadius: 10, background: 'var(--panel2)', fontSize: 12, alignItems: 'flex-start' }}>
         <Lock size={14} color="var(--accTx)" style={{ flex: 'none', marginTop: 1 }} />
-        <span className="muted pretty">{T('Avec tes clés, chaque clé sera chiffrée côté serveur (AES-256-GCM) et jamais renvoyée au navigateur. Cette passerelle n’est pas encore déployée : aucune clé n’est demandée ni stockée pour l’instant.', 'With your keys, each key will be encrypted server-side (AES-256-GCM) and never sent back to the browser. That gateway is not deployed yet: no key is requested or stored for now.')}</span>
+        <span className="muted pretty">{hosted
+          ? T('Formules Pro et Équipe : ajoute ta propre clé Claude (Anthropic). Elle est chiffrée côté serveur (AES-256-GCM), jamais renvoyée au navigateur, et tes requêtes IA ne consomment alors aucun crédit. Les clés OpenAI, fal.ai, ElevenLabs… arrivent avec les générations d’images, de vidéos et de voix.', 'Pro and Team plans: add your own Claude (Anthropic) key. It is encrypted server-side (AES-256-GCM), never sent back to the browser, and your AI requests then use no credits. OpenAI, fal.ai, ElevenLabs… keys come with image, video and voice generation.')
+          : T('Dans claude.ai, l’IA utilise directement ton compte Claude. Les clés personnelles (formules Pro et Équipe) se gèrent sur la version web.', 'Inside claude.ai, AI uses your Claude account directly. Personal keys (Pro and Team plans) are managed on the web version.')}</span>
       </div>
       <div className="col" style={{ gap: 12 }}>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}><span className="h2">{T('Catalogue', 'Catalog')}</span><span className="faint" style={{ fontSize: 12 }}>{T('1 connecté sur', '1 connected of')} {PROVIDERS.length}</span></div>
@@ -83,7 +91,7 @@ export function Providers() {
                   {on && <CircleCheck size={15} color="#30D158" />}
                 </div>
                 <span className="muted pretty" style={{ fontSize: 12 }}>{T(x.caps[0], x.caps[1])}</span>
-                <span style={{ marginTop: 'auto', fontSize: 11, color: on ? '#30D158' : 'var(--tx3)' }}>{x.live ? (on ? T('Connecté · ton compte Claude', 'Connected · your Claude account') : status === 'checking' ? T('Vérification…', 'Checking…') : T('Ouvre l’app dans claude.ai', 'Open the app in claude.ai')) : T('Bientôt · avec ta clé', 'Soon · with your key')}</span>
+                <span style={{ marginTop: 'auto', fontSize: 11, color: on ? '#30D158' : 'var(--tx3)' }}>{x.live ? (on ? (hosted ? T('Connecté · serveur Montaj', 'Connected · Montaj server') : T('Connecté · ton compte Claude', 'Connected · your Claude account')) : status === 'checking' ? T('Vérification…', 'Checking…') : hosted ? T('IA pas encore configurée sur ce serveur', 'AI not configured on this server yet') : T('Ouvre l’app dans claude.ai', 'Open the app in claude.ai')) : T('Bientôt · avec ta clé', 'Soon · with your key')}</span>
               </button>
             );
           })}
@@ -101,7 +109,9 @@ export function Providers() {
             {(status === 'ok' || status === 'notools') && <button className="btn" onClick={() => void runTest()}>{T('Tester la connexion', 'Test connection')}</button>}
           </div>
           {test && <span className="mono acc" style={{ fontSize: 11 }}>{test}</span>}
-          {status === 'off' && <span className="muted pretty" style={{ fontSize: 12 }}>{T('Ouvre Montaj Studio depuis claude.ai, connecté à ton compte, pour activer l’assistant et Studio Chat. Tout le reste fonctionne sans lui.', 'Open Montaj Studio from claude.ai, signed in, to turn on the assistant and Studio Chat. Everything else works without it.')}</span>}
+          {hosted && be?.billing && <OwnKey />}
+          {status === 'off' && hosted && <span className="muted pretty" style={{ fontSize: 12 }}>{T('Le serveur n’a pas encore de clé Anthropic (secret ANTHROPIC_API_KEY). Les éditeurs fonctionnent sans elle.', 'The server has no Anthropic key yet (ANTHROPIC_API_KEY secret). The editors work without it.')}</span>}
+          {status === 'off' && !hosted && <span className="muted pretty" style={{ fontSize: 12 }}>{T('Ouvre Montaj Studio depuis claude.ai, connecté à ton compte, pour activer l’assistant et Studio Chat. Tout le reste fonctionne sans lui.', 'Open Montaj Studio from claude.ai, signed in, to turn on the assistant and Studio Chat. Everything else works without it.')}</span>}
           <div style={{ display: 'grid', gridTemplateColumns: '150px minmax(0,1fr)', gap: '12px 16px', fontSize: 12, alignItems: 'start' }}>
             <span className="faint" style={{ lineHeight: '28px' }}>{T('Modèle par défaut', 'Default model')}</span>
             <Chips value={tier} onChange={(v: Tier) => set({ tier: v })} options={[{ id: 'quick' as const, label: T('Rapide', 'Fast') }, { id: 'default' as const, label: T('Équilibré', 'Balanced') }, { id: 'complex' as const, label: T('Avancé', 'Advanced') }]} />
@@ -111,7 +121,7 @@ export function Providers() {
               <span className="muted pretty">{mode === 'ask' ? T('Lecture seule : il explique et conseille.', 'Read-only: it explains and advises.') : mode === 'assist' ? T('Il travaille sur une copie ; tu appliques ou refuses la proposition.', 'It works on a copy; you apply or refuse the proposal.') : T('Il applique directement ; tu peux l’arrêter et tout annuler en une fois.', 'It applies directly; you can stop it and undo everything in one step.')}</span>
             </div>
             <span className="faint">{T('Coût', 'Cost')}</span>
-            <span className="muted pretty">{T('Chaque demande utilise ton forfait Claude. Montaj Studio ne facture rien.', 'Each request uses your Claude plan. Montaj Studio charges nothing.')}</span>
+            <span className="muted pretty">{hosted ? T('Chaque demande consomme des crédits selon sa taille réelle, sauf avec ta propre clé (Pro, Équipe).', 'Each request uses credits based on its real size, except with your own key (Pro, Team).') : T('Chaque demande utilise ton forfait Claude. Montaj Studio ne facture rien.', 'Each request uses your Claude plan. Montaj Studio charges nothing.')}</span>
             <span className="faint">{T('Données envoyées', 'Data sent')}</span>
             <span className="muted pretty">{T('Ta demande, une description du document (textes, couleurs, positions, noms et durées des clips) et ton kit de marque. Jamais tes fichiers vidéo, audio ou images.', 'Your request, a description of the document (texts, colors, positions, clip names and durations) and your brand kit. Never your video, audio or image files.')}</span>
           </div>
@@ -125,6 +135,50 @@ export function Providers() {
             <button className="btn primary" disabled>{T('Enregistrer', 'Save')}</button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Own Anthropic key (Pro and Team). Saved encrypted on the server; only the last 4 characters come back.
+function OwnKey() {
+  const T = useT();
+  const go = useApp((s) => s.go);
+  const notify = useApp((s) => s.notify);
+  const plan = useWallet((s) => s.info?.plan);
+  const [info, setInfo] = useState<KeysInfo | null>(null);
+  const [val, setVal] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void getKeys().then(setInfo).catch(() => setInfo(null)); }, [plan]);
+  const cur = info?.keys.find((k) => k.provider === 'anthropic');
+  const run = async (f: () => Promise<KeysInfo>, ok: string) => {
+    setBusy(true);
+    try { setInfo(await f()); setVal(''); notify(ok); } catch (e) { notify((e as Error).message, 'err'); } finally { setBusy(false); }
+  };
+  if (!info) return null;
+  return (
+    <div className="col" data-own-key style={{ gap: 8, padding: 14, borderRadius: 14, border: '1px solid var(--line)' }}>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <KeyRound size={14} /><span style={{ fontWeight: 600 }}>{T('Ma propre clé Claude', 'My own Claude key')}</span>
+        <span className="pill">{T('Pro · Équipe', 'Pro · Team')}</span>
+        {cur && <span className="pill ok">{T('Active · se termine par', 'Active · ends with')} {cur.last4}</span>}
+      </div>
+      {!info.available ? (
+        <span className="muted pretty" style={{ fontSize: 12 }}>{T('Pas encore activé sur ce serveur (secret KEYS_SECRET à configurer).', 'Not enabled on this server yet (KEYS_SECRET secret to set).')}</span>
+      ) : !info.allowed ? (
+        <div className="row wrap" style={{ gap: 8, fontSize: 12 }}>
+          <span className="muted pretty grow">{T(`Ta formule ${planOf(plan).fr} n’inclut pas les clés personnelles. Avec Pro ou Équipe, tes requêtes passent par ta clé et ne consomment aucun crédit.`, `Your ${planOf(plan).en} plan does not include personal keys. With Pro or Team, requests run on your key and use no credits.`)}</span>
+          <button className="btn" onClick={() => go('credits')}>{T('Voir les formules', 'See plans')}</button>
+        </div>
+      ) : (
+        <>
+          <span className="muted pretty" style={{ fontSize: 12 }}>{T('Crée une clé sur console.anthropic.com. Tes requêtes sont alors facturées par Anthropic sur ton compte, sans marge ; la limite de requêtes par jour de ta formule s’applique toujours.', 'Create a key at console.anthropic.com. Requests are then billed by Anthropic on your account, with no markup; your plan’s daily request limit still applies.')}</span>
+          <div className="row" style={{ gap: 8 }}>
+            <input className="input mono grow" type="password" autoComplete="off" value={val} onChange={(e) => setVal(e.target.value)} placeholder={cur ? T('Remplacer la clé (sk-ant-…)', 'Replace key (sk-ant-…)') : 'sk-ant-…'} />
+            <button className="btn primary" disabled={busy || !val.trim()} onClick={() => run(() => saveKey('anthropic', val.trim()), T('Clé enregistrée et chiffrée.', 'Key saved and encrypted.'))}>{T('Enregistrer', 'Save')}</button>
+            {cur && <button className="btn" disabled={busy} onClick={() => run(() => deleteKey('anthropic'), T('Clé supprimée.', 'Key deleted.'))}>{T('Supprimer', 'Delete')}</button>}
+          </div>
+        </>
       )}
     </div>
   );

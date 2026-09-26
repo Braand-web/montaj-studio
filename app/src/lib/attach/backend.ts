@@ -2,7 +2,7 @@
 // the app is hosted by that Worker; inside claude.ai the page cannot reach any server, so
 // every caller falls back to in-browser processing and says so.
 
-export interface BackendInfo { ok: boolean; ai: boolean; upload: boolean; scrape: boolean; browser: boolean; transcribe: boolean; maxVideoMb: number; maxFileMb: number; billing?: boolean; payments?: { stripe: boolean; plans: Record<string, { month: boolean; year: boolean }>; packs: boolean; mobileMoney: boolean } }
+export interface BackendInfo { ok: boolean; ai: boolean; upload: boolean; scrape: boolean; browser: boolean; transcribe: boolean; maxVideoMb: number; maxFileMb: number; billing?: boolean; byok?: boolean; payments?: { stripe: boolean; plans: Record<string, { month: boolean; year: boolean }>; packs: boolean; mobileMoney: boolean } }
 
 const NONE: BackendInfo = { ok: false, ai: false, upload: false, scrape: false, browser: false, transcribe: false, maxVideoMb: 0, maxFileMb: 0 };
 let infoP: Promise<BackendInfo> | null = null;

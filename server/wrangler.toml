@@ -52,6 +52,7 @@ zone_name = "montajstudio.fun"
 #   npx wrangler secret put ACCESS_CODE            (optional: locks the AI and uploads behind a code)
 #   npx wrangler secret put STRIPE_SECRET_KEY      (payments; without it the app shows "Paiement bientôt")
 #   npx wrangler secret put STRIPE_WEBHOOK_SECRET  (endpoint: https://<domain>/api/stripe/webhook)
+#   npx wrangler secret put KEYS_SECRET            (own API keys on Pro/Team; e.g. openssl rand -base64 48, never change it)
 # Stripe price ids of the monthly / yearly subscriptions (not secret):
 [vars]
 STRIPE_PRICE_CREATOR = ""

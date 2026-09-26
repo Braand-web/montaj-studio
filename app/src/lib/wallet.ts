@@ -57,3 +57,15 @@ export const openPortal = () => post<{ url: string }>('/api/billing/portal', {})
 // rewrites the hash on boot, so the query is captured by the store before that.
 let checkoutReturn: string | null = bootQuery.get('checkout');
 export function takeCheckoutReturn(): string | null { const c = checkoutReturn; checkoutReturn = null; return c; }
+
+// Own provider keys (Pro and Team). The server never sends a key back, only its last 4 characters.
+export interface KeysInfo { available: boolean; allowed: boolean; keys: { provider: string; last4: string; created_at: number }[] }
+async function keysCall(method: string, init: RequestInit = {}, q = ''): Promise<KeysInfo> {
+  const r = await fetch('/api/keys' + q, { method, ...init, headers: apiHeaders(init.body ? { 'content-type': 'application/json' } : {}) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j as { error?: string }).error ?? 'HTTP ' + r.status);
+  return j as KeysInfo;
+}
+export const getKeys = () => keysCall('GET');
+export const saveKey = (provider: string, key: string) => keysCall('PUT', { body: JSON.stringify({ provider, key }) });
+export const deleteKey = (provider: string) => keysCall('DELETE', {}, '?provider=' + encodeURIComponent(provider));

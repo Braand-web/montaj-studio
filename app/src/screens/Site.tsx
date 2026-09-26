@@ -5,7 +5,7 @@ import {
   Palette, Mic, ShoppingBag, Coins, Sparkle, Undo2, History, Gauge, ShieldCheck, FileDown,
 } from 'lucide-react';
 import { useApp, useT } from '../store/app';
-import { PLANS } from '../lib/pricing';
+import { PLANS, xofOf } from '../lib/pricing';
 import { openEditor } from '../ui/Shell';
 
 // Public marketing page (Montaj Site.dc.html). Every claim here matches what this build really does;
@@ -117,8 +117,9 @@ export function Site() {
     I: PICO[p.id], c: PCOL[p.id], name: fr ? p.fr : p.en,
     price: p.eurMonth ? (fr ? p.eurMonth.toLocaleString('fr-FR') + ' €' : '€' + p.eurMonth) : '0 €',
     per: p.eurMonth ? (p.perSeat ? T('/ siège / mois', '/ seat / month') : T('/ mois', '/ month')) : T('pour toujours', 'forever'),
-    desc: p.xofMonth ? T(`ou ${p.xofMonth.toLocaleString('fr-FR')} FCFA / mois · −17 % à l’année`, `or ${p.xofMonth.toLocaleString('fr-FR')} FCFA / month · −17% yearly`) : T('Sans carte bancaire.', 'No credit card.'),
-    feats: p.features.map((f) => (fr ? f.fr : f.en)),
+    xof: p.eurMonth ? xofOf(p.eurMonth).toLocaleString('fr-FR') + ' FCFA' : '0 FCFA',
+    desc: (fr ? p.tagFr : p.tagEn) + (p.eurYear ? T(` · −17 % à l’année (${p.eurYear} € · ${xofOf(p.eurYear).toLocaleString('fr-FR')} FCFA)`, ` · −17% yearly (€${p.eurYear} · ${xofOf(p.eurYear).toLocaleString('fr-FR')} FCFA)`) : T(' · sans carte bancaire', ' · no credit card')),
+    feats: p.features.map((f) => (fr ? f.fr : f.en) + (f.soon ? T(' (bientôt)', ' (soon)') : '')),
     btn: p.eurMonth ? T('Choisir', 'Choose') : T('Commencer', 'Get started'), live: true, dark: p.id === 'pro',
   }));
 
@@ -286,7 +287,10 @@ export function Site() {
                 <div className="col" style={{ height: '100%', borderRadius: 28, background: p.dark ? '#111113' : '#F5F5F7', color: p.dark ? '#F5F5F7' : '#1D1D1F', padding: 28, gap: 14, border: `1px solid ${p.dark ? '#30D158' : 'transparent'}` }}>
                   <span style={{ width: 42, height: 42, borderRadius: 21, background: p.c, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p.I size={19} color="#111113" /></span>
                   <span className="row" style={{ gap: 8, fontSize: 21, fontWeight: 700 }}>{p.name}{p.dark && <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#30D158', color: '#111113' }}>{T('Populaire', 'Popular')}</span>}</span>
-                  <div className="row" style={{ alignItems: 'baseline', gap: 6 }}><span style={{ fontSize: 44, fontWeight: 700, letterSpacing: '-.04em' }}>{p.price}</span><span style={{ fontSize: 15, opacity: 0.65 }}>{p.per}</span></div>
+                  <div className="col" style={{ gap: 2 }}>
+                    <div className="row" style={{ alignItems: 'baseline', gap: 6 }}><span style={{ fontSize: 44, fontWeight: 700, letterSpacing: '-.04em' }}>{p.price}</span><span style={{ fontSize: 15, opacity: 0.65 }}>{p.per}</span></div>
+                    <div className="row" style={{ alignItems: 'baseline', gap: 6 }}><span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.02em' }}>{p.xof}</span><span style={{ fontSize: 13, opacity: 0.65 }}>{p.per}</span></div>
+                  </div>
                   <span className="pretty" style={{ fontSize: 15, opacity: 0.75, lineHeight: 1.45 }}>{p.desc}</span>
                   <div className="col" style={{ gap: 10, margin: '6px 0 10px' }}>
                     {p.feats.map((ft) => <span key={ft} className="row" style={{ gap: 10, fontSize: 15, lineHeight: 1.4, alignItems: 'flex-start' }}><span style={{ width: 20, height: 20, borderRadius: 10, background: p.c, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', marginTop: 1 }}><Check size={12} color="#111113" /></span><span className="pretty">{ft}</span></span>)}

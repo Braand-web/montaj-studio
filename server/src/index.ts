@@ -3,7 +3,8 @@ import { scrape } from './scrape';
 import { claudeTurn, ClientError } from './claude';
 import { BlockedError } from './ssrf';
 import { getWallet, walletView, charge, checkout, portal, billingConfig, verifyStripe, stripeEvent, walletIdOk, BillingError, type BillingEnv, type Wallet } from './billing';
-import { FLAT } from '../../app/src/lib/pricing';
+import { FLAT, planOf } from '../../app/src/lib/pricing';
+import { listKeys, saveKey, deleteKey, byokAvailable, type KeysEnv } from './keys';
 
 // Montaj Studio server (Cloudflare Worker): serves the app and its /api.
 //   PUT  /api/upload      store an attachment in R2 (size and type limits)
@@ -14,8 +15,9 @@ import { FLAT } from '../../app/src/lib/pricing';
 //   GET  /api/wallet      credits, plan and usage ledger of the caller's wallet
 //   POST /api/billing/checkout | /api/billing/portal   Stripe Checkout / customer portal
 //   POST /api/stripe/webhook                             Stripe events (signature checked)
+//   GET|PUT|DELETE /api/keys                             the caller's own provider keys (Pro, Team)
 
-export interface Env extends BillingEnv {
+export interface Env extends KeysEnv {
   ASSETS: Fetcher;
   UPLOADS: R2Bucket;
   AI?: Ai;
@@ -96,7 +98,7 @@ export default {
     if (denied) return denied;
     try {
       if (path === '/api/health' && req.method === 'GET') {
-        return json({ ok: true, ai: !!env.ANTHROPIC_API_KEY, upload: true, scrape: true, browser: !!env.BROWSER, transcribe: !!env.AI, maxVideoMb: 100, maxFileMb: 20, locked: !!env.ACCESS_CODE, billing: !!env.DB, payments: billingConfig(env) });
+        return json({ ok: true, ai: !!env.ANTHROPIC_API_KEY, upload: true, scrape: true, browser: !!env.BROWSER, transcribe: !!env.AI, maxVideoMb: 100, maxFileMb: 20, locked: !!env.ACCESS_CODE, billing: !!env.DB, byok: byokAvailable(env), payments: billingConfig(env) });
       }
       if (path === '/api/stripe/webhook' && req.method === 'POST') {
         const raw = await req.text();
@@ -113,6 +115,12 @@ export default {
         wallet = await getWallet(env, wid, ip);
       }
       if (path === '/api/wallet' && req.method === 'GET') return wallet ? json(await walletView(env, wallet)) : fail('billing_unavailable', 'Facturation non configurée', 503);
+      if (path === '/api/keys') {
+        if (!wallet) return fail('billing_unavailable', 'Facturation non configurée', 503);
+        if (req.method === 'GET') return json(await listKeys(env, wallet));
+        if (req.method === 'PUT') return json(await saveKey(env, wallet, await req.json().catch(() => ({})) as { provider?: string; key?: string }));
+        if (req.method === 'DELETE') return json(await deleteKey(env, wallet, url.searchParams.get('provider') ?? ''));
+      }
       if (path === '/api/upload' && req.method === 'PUT') return await upload(req, env, url);
       if (req.method !== 'POST') return fail('not_found', 'Route inconnue', 404);
       if (path === '/api/transcribe') return await transcribe(req, env, wallet);
@@ -123,7 +131,9 @@ export default {
       if (path === '/api/scrape') {
         const preview = !!body.preview;
         if (wallet && !preview && wallet.sub_credits + wallet.pack_credits < FLAT.scrape) throw new BillingError('insufficient_credits', 'Crédits insuffisants pour analyser ce lien');
-        const r = await scrape(env, String(body.url ?? ''), { crawl: Number(body.crawl ?? 0), preview });
+        // Internal pages explored depend on the plan (Free: the page alone).
+        const crawl = Math.min(Number(body.crawl ?? 0) || 0, wallet ? planOf(wallet.plan).crawlPages : 5);
+        const r = await scrape(env, String(body.url ?? ''), { crawl, preview });
         if (wallet && !preview) await charge(env, wallet, FLAT.scrape * (1 + (r.pages?.length ?? 0)), 'scrape', { ref: r.finalUrl.slice(0, 200) });
         return json(r);
       }

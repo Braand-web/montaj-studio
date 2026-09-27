@@ -323,8 +323,8 @@ export function Site() {
             <div className="row wrap" style={{ gap: 22 }}>
               <button className="site-foot" onClick={() => toSection('tarifs')}>{T('Tarifs', 'Pricing')}</button>
               <button className="site-foot" onClick={() => toSection('faq')}>FAQ</button>
-              <button className="site-foot" onClick={() => go('legal')}>{T('Confidentialité', 'Privacy')}</button>
-              <button className="site-foot" onClick={() => go('legal')}>{T('CGU', 'Terms')}</button>
+              <a className="site-foot" href="/privacy" style={{ textDecoration: 'none' }}>{T('Confidentialité', 'Privacy')}</a>
+              <a className="site-foot" href="/terms" style={{ textDecoration: 'none' }}>{T('CGU', 'Terms')}</a>
               <button className="site-foot" onClick={() => go('feedback')}>{T('Idées & bugs', 'Ideas & bugs')}</button>
             </div>
           </div>

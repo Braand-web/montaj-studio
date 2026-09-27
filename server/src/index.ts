@@ -19,18 +19,21 @@ import { listKeys, saveKey, deleteKey, byokAvailable, type KeysEnv } from './key
 
 export interface Env extends KeysEnv {
   ASSETS: Fetcher;
-  UPLOADS: R2Bucket;
+  UPLOADS?: R2Bucket;
   AI?: Ai;
   BROWSER?: Fetcher;
   RL?: RateLimit;
   ANTHROPIC_API_KEY?: string;
+  SUPABASE_URL?: string;
+  SUPABASE_PUBLISHABLE_KEY?: string;
+  GOOGLE_AUTH_ENABLED?: string;
   ACCESS_CODE?: string; // optional: when set, the app must send it (x-montaj-code)
 }
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 const fail = (code: string, error: string, status = 400) => json({ code, error }, status);
 
-const PUBLIC = new Set(['/api/health', '/api/stripe/webhook']);
+const PUBLIC = new Set(['/api/health', '/api/config', '/api/stripe/webhook']);
 
 async function guard(req: Request, env: Env, path: string): Promise<Response | null> {
   if (path === '/api/stripe/webhook') return null; // server-to-server, authenticated by signature
@@ -47,6 +50,7 @@ async function guard(req: Request, env: Env, path: string): Promise<Response | n
 }
 
 async function upload(req: Request, env: Env, url: URL): Promise<Response> {
+  if (!env.UPLOADS) return fail('storage_unavailable', 'Le stockage distant des fichiers n’est pas activé. Les médias restent dans ce navigateur.', 503);
   const name = (url.searchParams.get('name') ?? 'fichier').slice(0, 200);
   const type = req.headers.get('content-type') ?? 'application/octet-stream';
   const kind = kindOf(name, type);
@@ -62,6 +66,7 @@ async function upload(req: Request, env: Env, url: URL): Promise<Response> {
 const TEXT_KINDS: FileKind[] = ['pdf', 'docx', 'xlsx', 'csv', 'text', 'code', 'json', 'zip', 'svg'];
 
 async function extract(env: Env, body: { id?: string }): Promise<Response> {
+  if (!env.UPLOADS) return fail('storage_unavailable', 'Le stockage distant des fichiers n’est pas activé.', 503);
   if (!body.id || !/^[a-z0-9-]{36}$/.test(body.id)) return fail('invalid_request', 'id manquant');
   const obj = await env.UPLOADS.get('u/' + body.id);
   if (!obj) return fail('not_found', 'Fichier introuvable (expiré ?)', 404);
@@ -93,12 +98,23 @@ export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
+    if (!path.startsWith('/api/') && url.hostname === 'www.montajstudio.fun') {
+      url.hostname = 'montajstudio.fun';
+      return Response.redirect(url.toString(), 301);
+    }
     if (!path.startsWith('/api/')) return env.ASSETS.fetch(req);
     const denied = await guard(req, env, path);
     if (denied) return denied;
     try {
       if (path === '/api/health' && req.method === 'GET') {
-        return json({ ok: true, ai: !!env.ANTHROPIC_API_KEY, upload: true, scrape: true, browser: !!env.BROWSER, transcribe: !!env.AI, maxVideoMb: 100, maxFileMb: 20, locked: !!env.ACCESS_CODE, billing: !!env.DB, byok: byokAvailable(env), payments: billingConfig(env) });
+        return json({ ok: true, ai: !!env.ANTHROPIC_API_KEY, upload: !!env.UPLOADS, scrape: true, browser: !!env.BROWSER, transcribe: !!env.AI, maxVideoMb: 100, maxFileMb: 20, locked: !!env.ACCESS_CODE, billing: !!env.DB, byok: byokAvailable(env), payments: billingConfig(env) });
+      }
+      if (path === '/api/config' && req.method === 'GET') {
+        return json({
+          supabaseUrl: env.SUPABASE_URL ?? '',
+          supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY ?? '',
+          googleAuthEnabled: env.GOOGLE_AUTH_ENABLED === 'true' && !!env.SUPABASE_URL && !!env.SUPABASE_PUBLISHABLE_KEY,
+        });
       }
       if (path === '/api/stripe/webhook' && req.method === 'POST') {
         const raw = await req.text();

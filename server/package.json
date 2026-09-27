@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm --prefix ../app run build && mkdir -p public && cp ../app/dist/montaj-studio.html public/index.html",
-    "build:app": "npm --prefix ../app run build && node -e \"const fs=require('node:fs');fs.mkdirSync('public',{recursive:true});fs.copyFileSync('../app/dist/montaj-studio.html','public/index.html')\"",
+    "build": "npm run build:app",
+    "build:app": "npm --prefix ../app run build && node -e \"const fs=require('node:fs');fs.mkdirSync('public',{recursive:true});fs.copyFileSync('../app/dist/montaj-studio.html','public/index.html');fs.cpSync('../app/public','public',{recursive:true})\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "wrangler dev",

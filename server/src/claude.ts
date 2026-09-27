@@ -6,7 +6,7 @@ import { userKey, type KeysEnv } from './keys';
 // One model turn for the app's agent loop (tools execute in the browser, which owns the
 // documents). Streams NDJSON: {"t":"d","d":text} … then {"t":"end",content,stop_reason}.
 
-export interface ClaudeEnv extends KeysEnv { ANTHROPIC_API_KEY?: string; UPLOADS: R2Bucket }
+export interface ClaudeEnv extends KeysEnv { ANTHROPIC_API_KEY?: string; UPLOADS?: R2Bucket }
 
 type Tier = 'quick' | 'default' | 'complex';
 interface Body {
@@ -50,6 +50,7 @@ export async function claudeTurn(env: ClaudeEnv, raw: unknown, ctx: ExecutionCon
   const messages = body.messages;
   // PDFs are read natively by Claude (text and scanned pages), attached before the turn's text.
   if (body.documents?.length) {
+    if (!env.UPLOADS) throw new ClientError('storage_unavailable', 'Le stockage distant des fichiers n’est pas activé.', 503);
     const i = Math.min(Math.max(0, body.documentTurn ?? messages.length - 1), messages.length - 1);
     const docs: Anthropic.Beta.BetaContentBlockParam[] = [];
     for (const id of body.documents) {

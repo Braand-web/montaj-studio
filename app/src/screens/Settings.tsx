@@ -95,7 +95,7 @@ export function Settings() {
         <div className="card col" style={{ padding: 22, gap: 16 }}>
           <div className="row" style={{ gap: 14 }}>
             {id.avatarUrl ? <img src={id.avatarUrl} alt="" width={60} height={60} style={{ borderRadius: 30 }} /> : <span style={{ width: 60, height: 60, borderRadius: 30, background: 'linear-gradient(145deg,#0A84FF,#BF5AF2)', color: '#fff', fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{(userName || id.name || '?').charAt(0).toUpperCase()}</span>}
-            <div className="col" style={{ gap: 2 }}><span style={{ fontWeight: 600 }}>{userName || id.name || T('Sans nom', 'No name')}</span><span className="faint" style={{ fontSize: 12 }}>{id.status === 'claude' ? T('Connecté avec ton compte Claude', 'Signed in with your Claude account') : T('Mode local, sans compte', 'Local mode, no account')}</span></div>
+            <div className="col" style={{ gap: 2 }}><span style={{ fontWeight: 600 }}>{userName || id.name || T('Sans nom', 'No name')}</span><span className="faint" style={{ fontSize: 12 }}>{id.status === 'google' ? T('Connecté avec Google', 'Signed in with Google') : id.status === 'claude' ? T('Connecté avec ton compte Claude', 'Signed in with your Claude account') : T('Mode local, sans compte', 'Local mode, no account')}</span>{id.email && <span className="faint" style={{ fontSize: 12 }}>{id.email}</span>}</div>
           </div>
           <label className="field" style={{ maxWidth: 360 }}><span>{T('Nom affiché dans l’application', 'Name shown in the app')}</span><input id="st-name" className="input lg" value={userName} placeholder={id.name} onChange={(e) => useApp.getState().set({ userName: e.target.value })} /></label>
           <div className="col" style={{ gap: 6 }}><span className="eyebrow">{T('Langue', 'Language')}</span><Chips value={lang} onChange={(v) => useApp.getState().setLang(v)} options={[{ id: 'fr' as const, label: 'Français' }, { id: 'en' as const, label: 'English' }]} /></div>
@@ -105,7 +105,21 @@ export function Settings() {
       {tab === 'security' && (
         <div className="card col" style={{ padding: 22, gap: 14 }}>
           <span style={{ fontWeight: 600 }}>{T('Compte et connexion', 'Account and sign-in')}</span>
-          <span className="muted pretty" style={{ fontSize: 13 }}>{T('Il n’y a pas de mot de passe Montaj : quand l’app est ouverte dans claude.ai, c’est ton compte Claude qui t’identifie. Mot de passe, double authentification et appareils connectés se gèrent dans les réglages de ton compte claude.ai.', 'There is no Montaj password: when the app is open in claude.ai, your Claude account identifies you. Password, two-factor authentication and signed-in devices are managed in your claude.ai account settings.')}</span>
+          <span className="muted pretty" style={{ fontSize: 13 }}>{T('La connexion Google sert à t’identifier. Elle ne synchronise pas les documents : tes projets restent dans le stockage local de ce navigateur.', 'Google sign-in identifies you. It does not sync documents: your projects stay in this browser’s local storage.')}</span>
+          <div className="col" style={{ gap: 8, padding: 14, borderRadius: 14, background: 'var(--panel2)' }}>
+            <span style={{ fontWeight: 600 }}>{T('Connexion avec Google', 'Sign in with Google')}</span>
+            {id.status === 'google' ? (
+              <div className="row wrap" style={{ gap: 10 }}>
+                <span className="muted" style={{ fontSize: 13 }}>{id.email}</span>
+                <button className="btn sm" onClick={() => void id.signOut()}>{T('Se déconnecter', 'Sign out')}</button>
+              </div>
+            ) : id.googleAuthEnabled ? (
+              <button className="btn" disabled={id.googleBusy} onClick={() => void id.signInWithGoogle()}>{id.googleBusy ? T('Connexion…', 'Signing in…') : T('Continuer avec Google', 'Continue with Google')}</button>
+            ) : (
+              <span className="muted pretty" style={{ fontSize: 13 }}>{T('Google Auth n’est pas encore activé. Tes projets restent disponibles en mode local.', 'Google Auth is not enabled yet. Your projects remain available in local mode.')}</span>
+            )}
+            {id.authError && <span role="alert" style={{ color: 'var(--warn)', fontSize: 12 }}>{id.authError}</span>}
+          </div>
           <div style={{ height: 1, background: 'var(--line)' }} />
           <span style={{ fontWeight: 600 }}>{T('Où sont tes données', 'Where your data lives')}</span>
           <span className="muted pretty" style={{ fontSize: 13 }}>{T('Tout est stocké dans ce navigateur, sur cet appareil. Toute personne ayant accès à ce navigateur y a accès : sur un ordinateur partagé, efface tes données avant de partir (onglet Données).', 'Everything is stored in this browser, on this device. Anyone with access to this browser can see it: on a shared computer, erase your data before leaving (Data tab).')}</span>

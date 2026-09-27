@@ -5,8 +5,9 @@ import {
   Palette, Mic, ShoppingBag, Coins, Sparkle, Undo2, History, Gauge, ShieldCheck, FileDown,
 } from 'lucide-react';
 import { useApp, useT } from '../store/app';
-import { PLANS, xofOf } from '../lib/pricing';
+import { PLANS } from '../lib/pricing';
 import { openEditor } from '../ui/Shell';
+import { InstallPwaButton } from '../ui/InstallPwaButton';
 
 // Public marketing page (Montaj Site.dc.html). Every claim here matches what this build really does;
 // paid plans are shown as "Bientôt" and no fake purchase is offered.
@@ -78,18 +79,15 @@ export function Site() {
   }, [lang]);
 
   const heroWords = lang === 'fr' ? ['Éditeur vidéo', 'et design', 'en ligne gratuit.'] : ['Free online', 'video and design', 'editor.'];
-  const prompts = lang === 'fr'
-    ? ['Affiche pour ma soirée de lancement, samedi 18 h', 'Story Instagram pour les soldes de ma boutique', '3 miniatures YouTube pour ma vidéo de test', 'Vidéo verticale avec un titre accrocheur']
-    : ['Poster for my launch party, Saturday 6 pm', 'Instagram story for my shop’s sale', '3 YouTube thumbnails for my review video', 'Vertical video with a catchy title'];
-  const typed = (() => { let k = t; for (let i = 0; i < 400; i++) { const p = prompts[i % prompts.length], L = p.length + 28; if (k < L) return p.slice(0, Math.min(p.length, k)); k -= L; } return ''; })();
+  const typed = T('Décris ton projet ici…', 'Describe your project here…');
 
   const menuItems: [React.ElementType, string, string, string, string][] = [
-    [Sparkles, '#BF5AF2', 'Studio Chat', T('Designs et vidéos créés en discutant avec Claude.', 'Designs and videos created by chatting with Claude.'), 'chat'],
+    [Sparkles, '#BF5AF2', 'Studio Chat', T('Assistant IA disponible après configuration d’un fournisseur.', 'AI assistant available after a provider is configured.'), 'chat'],
     [Clapperboard, '#64D2FF', T('Éditeur vidéo', 'Video editor'), T('Timeline multipiste, titres, sous-titres, export.', 'Multitrack timeline, titles, captions, export.'), 'video'],
     [PenTool, '#FF9F0A', T('Éditeur design', 'Design editor'), T('Posts, affiches, miniatures, cartes, présentations.', 'Posts, posters, thumbnails, cards, decks.'), 'design'],
     [HardDrive, '#30D158', T('Local et privé', 'Local and private'), T('Tes fichiers restent dans ton navigateur.', 'Your files stay in your browser.'), 'local'],
     [Layers, '#0A84FF', T('Création en masse', 'Bulk creation'), T('Un modèle, un CSV, des dizaines de visuels.', 'One template, one CSV, dozens of visuals.'), 'design'],
-    [Coins, '#FF375F', T('Tarifs', 'Pricing'), T('Gratuit pour commencer, dès 7,99 € ensuite.', 'Free to start, from €7.99 after.'), 'tarifs'],
+    [Coins, '#FF375F', T('Tarifs', 'Pricing'), T('Les éditeurs sont gratuits ; les offres payantes ne sont pas encore activées.', 'The editors are free; paid plans are not enabled yet.'), 'tarifs'],
   ];
 
   const audiences: [React.ElementType, string][] = [[Play, 'YouTubeurs'], [Smartphone, T('TikTokeurs', 'TikTokers')], [Store, T('Commerçants', 'Shop owners')], [Briefcase, T('Agences', 'Agencies')], [Megaphone, T('Équipes marketing', 'Marketing teams')], [GraduationCap, T('Enseignants', 'Teachers')], [HeartHandshake, T('Associations', 'Non-profits')], [Palette, T('Graphistes', 'Designers')], [Mic, T('Podcasteurs', 'Podcasters')], [ShoppingBag, 'E-commerce']];
@@ -97,8 +95,8 @@ export function Site() {
 
   const feats = [
     { id: 'chat', I: Sparkles, badge: 'Studio Chat', c: '#BF5AF2', soft: '#F4E9FD', ink: '#8E2FC2', glow: 'rgba(191,90,242,.22)', kind: 'chat',
-      title: T('Demande-le en une phrase, retrouve-le dans tes documents.', 'Ask in one sentence, find it in your documents.'),
-      points: [T('Claude crée des designs et des vidéos à partir de ta demande', 'Claude creates designs and videos from your request'), T('Trois modes : Demander, Assister (tu valides) ou Agent (il modifie en direct)', 'Three modes: Ask, Assist (you approve) or Agent (edits live)'), T('Chaque appel apparaît dans Utilisation IA, avec une limite par jour', 'Every call shows up in AI usage, with a daily limit')] },
+      title: T('Un assistant, lorsque ton fournisseur IA est configuré.', 'An assistant, when your AI provider is configured.'),
+      points: [T('Aucune clé de fournisseur IA n’est configurée sur le serveur pour le moment', 'No AI provider key is configured on the server yet'), T('Les éditeurs vidéo et design restent utilisables sans assistant', 'The video and design editors remain usable without the assistant'), T('Les médias du projet restent dans ton navigateur', 'Project media stays in your browser')] },
     { id: 'video', I: Clapperboard, badge: T('Éditeur vidéo', 'Video editor'), c: '#0A84FF', soft: '#E6F1FF', ink: '#0066CC', glow: 'rgba(10,132,255,.2)', kind: 'video',
       title: T('Un vrai montage, sans rien installer.', 'Real editing, nothing to install.'),
       points: [T('Timeline multipiste : découpe, titres, images, musique', 'Multitrack timeline: cuts, titles, images, music'), T('Sous-titres éditables, import et export SRT / WebVTT', 'Editable captions, SRT / WebVTT import and export'), T('Export vidéo sans filigrane (MP4 ou WebM selon ton navigateur)', 'Watermark-free video export (MP4 or WebM depending on your browser)')] },
@@ -113,23 +111,21 @@ export function Site() {
   const fr = useApp((st) => st.lang) === 'fr';
   const PCOL = { free: '#AEAEB2', creator: '#FF9F0A', pro: '#30D158', team: '#BF5AF2' } as const;
   const PICO = { free: Sparkle, creator: Coins, pro: Sparkles, team: Briefcase } as const;
-  const plans = PLANS.map((p) => ({
+  const plans = PLANS.filter((p) => p.id === 'free').map((p) => ({
     I: PICO[p.id], c: PCOL[p.id], name: fr ? p.fr : p.en,
-    price: p.eurMonth ? (fr ? p.eurMonth.toLocaleString('fr-FR') + ' €' : '€' + p.eurMonth) : '0 €',
-    per: p.eurMonth ? (p.perSeat ? T('/ siège / mois', '/ seat / month') : T('/ mois', '/ month')) : T('pour toujours', 'forever'),
-    xof: p.eurMonth ? xofOf(p.eurMonth).toLocaleString('fr-FR') + ' FCFA' : '0 FCFA',
-    desc: (fr ? p.tagFr : p.tagEn) + (p.eurYear ? T(` · −17 % à l’année (${p.eurYear} € · ${xofOf(p.eurYear).toLocaleString('fr-FR')} FCFA)`, ` · −17% yearly (€${p.eurYear} · ${xofOf(p.eurYear).toLocaleString('fr-FR')} FCFA)`) : T(' · sans carte bancaire', ' · no credit card')),
-    feats: p.features.map((f) => (fr ? f.fr : f.en) + (f.soon ? T(' (bientôt)', ' (soon)') : '')),
-    btn: p.eurMonth ? T('Choisir', 'Choose') : T('Commencer', 'Get started'), live: true, dark: p.id === 'pro',
+    price: '0 €', per: T('pour toujours', 'forever'), xof: '0 FCFA',
+    desc: T('Sans compte et sans paiement.', 'No account or payment required.'),
+    feats: [T('Éditeurs vidéo et design disponibles', 'Video and design editors available'), T('Projets, médias et exports conservés dans ce navigateur', 'Projects, media and exports stay in this browser'), T('Sauvegarde et restauration locales', 'Local backup and restore')],
+    btn: T('Commencer', 'Get started'), live: true, dark: false,
   }));
 
   const faqs: [string, string][] = [
-    [T('Est-ce vraiment gratuit ?', 'Is it really free?'), T('Oui. Les éditeurs vidéo et design, l’export sans filigrane et les templates sont gratuits, sans limite de projets, avec 100 crédits IA offerts chaque mois. Dans claude.ai, l’assistant utilise directement ton compte Claude.', 'Yes. The video and design editors, watermark-free export and templates are free, with no project limit and 100 AI credits every month. Inside claude.ai, the assistant uses your Claude account directly.')],
-    [T('Faut-il créer un compte ?', 'Do I need an account?'), T('Non. Tu peux tout utiliser tout de suite. Tes projets restent sur cet appareil ; pense à faire une sauvegarde depuis les Paramètres.', 'No. You can use everything right away. Your projects stay on this device; make a backup from Settings.')],
-    [T('Mes fichiers sont-ils envoyés sur un serveur ?', 'Are my files sent to a server?'), T('Non. Tes médias, le rendu et les exports restent dans ton navigateur. Quand tu utilises l’assistant, seuls ta demande et la description du document sont envoyés à Claude.', 'No. Your media, rendering and exports stay in your browser. When you use the assistant, only your request and a description of the document are sent to Claude.')],
+    [T('Est-ce vraiment gratuit ?', 'Is it really free?'), T('Les éditeurs vidéo et design, les modèles et les exports sont disponibles gratuitement. L’assistant IA et les achats ne sont pas activés sur ce site pour le moment.', 'The video and design editors, templates and exports are available for free. AI assistance and purchases are not enabled on this site yet.')],
+    [T('Faut-il créer un compte ?', 'Do I need an account?'), T('Non. Tu peux commencer sans compte. Tes projets restent sur cet appareil ; fais une sauvegarde depuis les Paramètres si tu changes d’appareil.', 'No. You can start without an account. Your projects stay on this device; make a backup in Settings before changing devices.')],
+    [T('Mes fichiers sont-ils envoyés sur un serveur ?', 'Are my files sent to a server?'), T('Tes projets, médias, rendus et exports restent dans ce navigateur. Le dépôt distant de fichiers n’est pas activé. Aucun fournisseur IA n’est configuré sur ce site.', 'Your projects, media, renders and exports stay in this browser. Remote file storage is not enabled. No AI provider is configured on this site.')],
     [T('Quels formats puis-je exporter ?', 'Which formats can I export?'), T('PNG, JPG et PDF pour les designs ; MP4 ou WebM pour les vidéos selon ton navigateur ; SRT et WebVTT pour les sous-titres.', 'PNG, JPG and PDF for designs; MP4 or WebM for videos depending on your browser; SRT and WebVTT for captions.')],
-    [T('Comment fonctionnent les crédits ?', 'How do credits work?'), T('1 crédit = 0,01 €. Chaque requête IA consomme selon sa taille réelle (un texte court : 1 à 3 crédits, une création complète : 25 à 60). L’édition et l’export ne consomment rien. Des packs sans abonnement sont aussi disponibles, dès 5 €.', '1 credit = €0.01. Each AI request uses credits based on its real size (short copy: 1 to 3 credits, a full creation: 25 to 60). Editing and exporting are free. No-subscription packs are available too, from €5.')],
-    [T('Puis-je modifier ce que l’IA fait ?', 'Can I change what the AI does?'), T('Oui. En mode Assister tu valides ou refuses chaque proposition, tout s’annule avec ⌘Z et l’historique des versions garde chaque étape.', 'Yes. In Assist mode you approve or refuse each proposal, everything undoes with ⌘Z and version history keeps each step.')],
+    [T('Quand les offres payantes seront-elles disponibles ?', 'When will paid plans be available?'), T('Le paiement n’est pas activé sur le serveur. Les offres payantes ne peuvent donc pas être souscrites depuis le site.', 'Payments are not enabled on the server, so paid plans cannot be purchased from the site.')],
+    [T('Puis-je modifier mes créations ?', 'Can I edit my work?'), T('Oui. Les créations restent modifiables dans les éditeurs ; annule avec ⌘Z et retrouve les versions enregistrées sur cet appareil.', 'Yes. Work remains editable in the editors; undo with ⌘Z and access saved versions on this device.')],
   ];
 
   const shotsOn = (i: number, per: number, base: number) => (t % per) >= base + i * 7;
@@ -170,14 +166,14 @@ export function Site() {
           <div data-orb="2" style={{ left: '38%', top: '42%', width: 360, height: 360, background: 'radial-gradient(circle, rgba(255,159,10,.2), rgba(255,159,10,0) 65%)' }} />
         </div>
         <div data-float="0" className="z1"><Logo box={88} bar={11} gap={6} h={40} r={26} /></div>
-        <span data-rise="0" className="site-pill z1"><span style={{ width: 8, height: 8, borderRadius: 4, background: '#30D158' }} />{T('Nouveau : Studio Chat crée designs et vidéos avec Claude', 'New: Studio Chat creates designs and videos with Claude')}</span>
+        <span data-rise="0" className="site-pill z1"><span style={{ width: 8, height: 8, borderRadius: 4, background: '#30D158' }} />{T('Éditeurs vidéo et design · projets enregistrés sur cet appareil', 'Video and design editors · projects stored on this device')}</span>
         <h1 className="site-h1 z1">
           {heroWords.map((w, i) => <span key={w} data-w="1" style={i === 2 ? { background: 'linear-gradient(90deg,#0A84FF,#BF5AF2 55%,#FF375F)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' } : undefined}>{w}</span>)}
         </h1>
         <p data-rise="1" className="site-lead z1">{T('Monte des vidéos avec titres et sous-titres, ou crée des visuels et des miniatures dans ton navigateur. Les deux éditeurs sont gratuits et sans filigrane.', 'Edit videos with titles and captions, or create graphics and thumbnails in your browser. Both editors are free and watermark-free.')}</p>
         <div data-rise="2" className="row wrap z1" style={{ gap: 10, justifyContent: 'center' }}>
           <button className="site-btn primary" onClick={start}>{T('Commencer gratuitement', 'Start for free')}<ArrowRight size={17} /></button>
-          <button className="site-btn soft" onClick={() => go('chat')}><Sparkles size={16} color="#BF5AF2" />{T('Essayer Studio Chat', 'Try Studio Chat')}</button>
+          <InstallPwaButton className="site-btn soft" />
         </div>
         <span data-rise="3" className="z1" style={{ fontSize: 13, color: '#8E8E93' }}>{T('Sans compte · Sans carte bancaire · Tes projets restent sur ton appareil', 'No account · No credit card · Your projects stay on your device')}</span>
       </section>
@@ -192,11 +188,11 @@ export function Site() {
               ))}
             </div>
             <div className="col" style={{ padding: 22, gap: 14, minWidth: 0 }}>
-              <div style={{ alignSelf: 'flex-end', maxWidth: '78%', padding: '10px 14px', borderRadius: '18px 18px 6px 18px', background: '#0A84FF', color: '#fff', fontSize: 14 }}>{T('Vidéo verticale pour ma crème au karité, 4 plans', 'Vertical video for my shea butter cream, 4 shots')}</div>
+              <div style={{ alignSelf: 'flex-end', maxWidth: '78%', padding: '10px 14px', borderRadius: '18px 18px 6px 18px', background: '#0A84FF', color: '#fff', fontSize: 14 }}>{T('Décris ton projet ici…', 'Describe your project here…')}</div>
               <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
                 <span style={{ width: 28, height: 28, borderRadius: 14, background: 'linear-gradient(135deg,#0A84FF,#BF5AF2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Sparkles size={13} color="#fff" /></span>
                 <div className="col" style={{ gap: 10, minWidth: 0, flex: 1 }}>
-                  <span style={{ color: '#F5F5F7', fontSize: 14 }}>{T('J’ai créé la vidéo en 4 plans avec un titre par plan. Ajoute tes rushs dans l’éditeur pour les remplacer.', 'I created the video in 4 shots with a title on each. Add your footage in the editor to replace them.')}</span>
+                  <span style={{ color: '#F5F5F7', fontSize: 14 }}>{T('Aperçu de l’interface. Ajoute tes propres médias et textes dans l’éditeur.', 'Interface preview. Add your own media and text in the editor.')}</span>
                   <div className="site-shots">
                     {shots.map(([a, b, l], i) => { const on = shotsOn(i, 70, 8); return (
                       <div key={l} style={{ aspectRatio: '9/16', borderRadius: 12, background: `linear-gradient(160deg,${a},${b})`, position: 'relative', opacity: on ? 1 : 0, transform: on ? 'none' : 'translateY(10px) scale(.94)', transition: 'opacity .45s ease, transform .45s cubic-bezier(.2,.8,.2,1)' }}>
@@ -217,16 +213,14 @@ export function Site() {
             </div>
             <div className="site-prev-side right">
               <span style={{ color: '#8E8E93', fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase' }}>{T('Tâches', 'Tasks')}</span>
-              {[[Clapperboard, T('Créer la vidéo', 'Create the video'), '#30D158', 0], [Type, T('Ajouter 4 titres', 'Add 4 titles'), '#30D158', 0], [Captions, T('Sous-titres', 'Captions'), '#FF9F0A', 1], [Undo2, T('Version enregistrée', 'Version saved'), '#0A84FF', 0]].map(([I, l, c, bar], i) => {
-                const pct = Math.floor((t * 1.6) % 100);
+              {[[Clapperboard, T('Clips vidéo', 'Video clips'), '#30D158', 0], [Type, T('Titres', 'Titles'), '#30D158', 0], [Captions, T('Sous-titres', 'Captions'), '#FF9F0A', 1], [Undo2, T('Historique', 'History'), '#0A84FF', 0]].map(([I, l, c, bar], i) => {
                 const Ic = I as React.ElementType;
                 return (
                   <div key={i} className="row" style={{ gap: 10 }}>
                     <span style={{ width: 38, height: 38, borderRadius: 10, background: '#2C2C2E', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Ic size={16} color="#D1D1D6" /></span>
                     <span className="col" style={{ gap: 2, minWidth: 0 }}>
                       <span className="ell" style={{ color: '#F5F5F7', fontSize: 12 }}>{l as string}</span>
-                      <span style={{ color: c as string, fontSize: 11 }}>{bar ? T('En cours', 'Running') + ' · ' + pct + ' %' : T('Terminé', 'Done')}</span>
-                      {!!bar && <span style={{ display: 'block', width: 120, height: 3, borderRadius: 2, background: '#3A3A3C', overflow: 'hidden', marginTop: 3 }}><span style={{ display: 'block', height: '100%', width: pct + '%', background: '#FF9F0A' }} /></span>}
+                      <span style={{ color: c as string, fontSize: 11 }}>{T('Option de l’éditeur', 'Editor option')}</span>
                     </span>
                   </div>
                 );
@@ -279,7 +273,7 @@ export function Site() {
         <section id="tarifs" style={{ padding: '120px 24px 60px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 40 }}>
           <div className="col" style={{ alignItems: 'center', gap: 14, textAlign: 'center' }}>
             <span className="site-pill">{T('Tarifs', 'Pricing')}</span>
-            <h2 className="site-h2 big" style={{ maxWidth: 760 }}>{T('Les éditeurs sont gratuits. Tu paies seulement l’IA que tu utilises.', 'The editors are free. You only pay for the AI you use.')}</h2>
+            <h2 className="site-h2 big" style={{ maxWidth: 760 }}>{T('Les éditeurs sont gratuits. Les offres IA et paiement arrivent après configuration.', 'The editors are free. AI and paid plans will be enabled after setup.')}</h2>
           </div>
           <div className="site-plans">
             {plans.map((p, i) => (
@@ -318,7 +312,7 @@ export function Site() {
           <div data-reveal="0" className="site-final">
             <div data-float="2"><Logo box={72} bar={9} gap={5} h={33} r={22} /></div>
             <h2 className="site-h2 big" style={{ color: '#fff', maxWidth: 720 }}>{T('Ta prochaine vidéo commence par une phrase.', 'Your next video starts with a sentence.')}</h2>
-            <p style={{ margin: 0, maxWidth: 520, color: 'rgba(255,255,255,.75)', fontSize: 18, lineHeight: 1.5 }}>{T('Ouvre Montaj Studio, écris ce que tu veux, et modifie le résultat comme tu l’entends.', 'Open Montaj Studio, write what you want, and change the result however you like.')}</p>
+            <p style={{ margin: 0, maxWidth: 520, color: 'rgba(255,255,255,.75)', fontSize: 18, lineHeight: 1.5 }}>{T('Ouvre les éditeurs vidéo ou design et crée avec tes propres médias et textes.', 'Open the video or design editors and create with your own media and text.')}</p>
             <button className="site-btn" style={{ background: '#fff', color: '#111113' }} onClick={start}>{T('Commencer gratuitement', 'Start for free')}<ArrowRight size={17} /></button>
           </div>
         </section>
@@ -343,10 +337,10 @@ export function Site() {
 type TT = (fr: string, en: string) => string;
 
 function ChatVis({ t, T }: { t: number; T: TT }) {
-  const cards = [['#0A84FF', '#BF5AF2', 'SOLDES -30 %'], ['#FF9F0A', '#FF375F', 'NOUVEAU'], ['#30D158', '#0A84FF', 'LIVE 18H'], ['#1D1D1F', '#7D5CFF', 'TEST PIXEL']];
+  const cards = [['#0A84FF', '#BF5AF2', 'Votre titre'], ['#FF9F0A', '#FF375F', 'Votre texte'], ['#30D158', '#0A84FF', 'Votre message'], ['#1D1D1F', '#7D5CFF', 'Votre contenu']];
   return (
     <div className="col" style={{ width: '100%', maxWidth: 440, borderRadius: 24, background: '#fff', boxShadow: '0 30px 80px rgba(0,0,0,.14)', padding: 16, gap: 12 }}>
-      <div style={{ alignSelf: 'flex-end', padding: '9px 13px', borderRadius: '16px 16px 5px 16px', background: '#0A84FF', color: '#fff', fontSize: 13 }}>{T('4 variantes de post pour mes soldes', '4 post variants for my sale')}</div>
+      <div style={{ alignSelf: 'flex-end', padding: '9px 13px', borderRadius: '16px 16px 5px 16px', background: '#0A84FF', color: '#fff', fontSize: 13 }}>{T('Aperçu de l’interface', 'Interface preview')}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {cards.map(([a, b, l], i) => { const on = (t % 80) >= 10 + i * 6; return (
           <div key={l} style={{ aspectRatio: '4/5', borderRadius: 14, background: `linear-gradient(160deg,${a},${b})`, opacity: on ? 1 : 0, transform: on ? 'none' : 'scale(.9)', transition: 'opacity .5s ease, transform .5s cubic-bezier(.2,.8,.2,1)', display: 'flex', alignItems: 'flex-end', padding: 12 }}>
@@ -382,8 +376,8 @@ function DesignVis({ t, T }: { t: number; T: TT }) {
     <div style={{ position: 'relative', width: '100%', maxWidth: 460, display: 'flex', justifyContent: 'center' }}>
       <div style={{ width: 280, maxWidth: '72%', aspectRatio: '4/5', borderRadius: 18, background: 'radial-gradient(ellipse at 20% 15%, #FF375F, transparent 55%), radial-gradient(ellipse at 85% 40%, #7D5CFF, transparent 55%), #140A2E', boxShadow: '0 30px 80px rgba(0,0,0,.2)', position: 'relative', overflow: 'hidden' }}>
         <div className="col" style={{ position: 'absolute', inset: 'auto 18px 22px 18px', gap: 6 }}>
-          <span style={{ color: '#fff', fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1 }}>{T('SOIRÉE DE LANCEMENT', 'LAUNCH NIGHT')}</span>
-          <span style={{ color: '#fff', fontSize: 13 }}>{T('Samedi 26 septembre · 18 h', 'Saturday, September 26 · 6 pm')}</span>
+          <span style={{ color: '#fff', fontSize: 30, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1 }}>{T('Votre titre', 'Your title')}</span>
+          <span style={{ color: '#fff', fontSize: 13 }}>{T('Votre date', 'Your date')}</span>
         </div>
         <div data-pulse="1" style={{ position: 'absolute', top: 14, left: 14, right: 14, bottom: 120, border: '1.5px dashed rgba(255,255,255,.9)', borderRadius: 8 }} />
       </div>

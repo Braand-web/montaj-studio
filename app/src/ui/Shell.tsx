@@ -11,6 +11,7 @@ import { useIdentity } from '../lib/identity';
 import { useWallet } from '../lib/wallet';
 import { emptyVideo } from '../lib/create';
 import { fmt } from '../model/formats';
+import { InstallPwaButton } from './InstallPwaButton';
 
 type NavId = Screen | 'open-video' | 'open-design';
 export interface NavItem { id: NavId; fr: string; en: string; c: string; I: typeof House }
@@ -167,18 +168,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </>
             ) : <div className="muted" style={{ fontSize: 11 }}>{persistent ? T('Disponible', 'Available') : T('Session uniquement (stockage bloqué)', 'Session only (storage blocked)')}</div>}
           </div>
-          {id.status === 'claude' ? (
+          <InstallPwaButton className="btn" style={{ height: 30, alignSelf: 'flex-start', fontSize: 11 }} />
+          {id.status === 'claude' || id.status === 'google' ? (
             <div className="col" style={{ border: '1px solid var(--line2)', borderRadius: 10, padding: 10, gap: 8 }}>
               <div className="row" style={{ gap: 8 }}>
                 {id.avatarUrl ? <img src={id.avatarUrl} alt="" width={28} height={28} style={{ borderRadius: 14, flex: 'none' }} /> : <span style={{ width: 28, height: 28, borderRadius: 14, background: id.color, color: '#fff', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>{(displayName || '?').charAt(0).toUpperCase()}</span>}
-                <div className="col" style={{ minWidth: 0 }}><span className="ell" style={{ fontWeight: 600, fontSize: 12 }}>{displayName || T('Compte Claude', 'Claude account')}</span><span className="faint" style={{ fontSize: 11 }}>{T('Connecté via claude.ai', 'Signed in via claude.ai')}</span></div>
+                <div className="col" style={{ minWidth: 0 }}><span className="ell" style={{ fontWeight: 600, fontSize: 12 }}>{displayName || (id.status === 'google' ? 'Google' : T('Compte Claude', 'Claude account'))}</span><span className="faint" style={{ fontSize: 11 }}>{id.status === 'google' ? T('Connecté avec Google', 'Signed in with Google') : T('Connecté via claude.ai', 'Signed in via claude.ai')}</span></div>
               </div>
               <span className="muted" style={{ fontSize: 11 }}><span className="acc">●</span> {T('Documents stockés sur cet appareil', 'Documents stored on this device')}</span>
             </div>
           ) : (
             <div className="col" style={{ border: '1px solid var(--line2)', borderRadius: 10, padding: 10, gap: 6 }}>
               <span style={{ fontWeight: 600, fontSize: 12 }}>{T('Mode local', 'Local mode')}</span>
-              <span className="muted pretty" style={{ fontSize: 12 }}>{T('Tes projets restent sur cet appareil. Ouvre l’app dans claude.ai pour utiliser ton compte et l’IA.', 'Your projects stay on this device. Open the app in claude.ai to use your account and AI.')}</span>
+              <span className="muted pretty" style={{ fontSize: 12 }}>{T('Tes projets restent sur cet appareil. La connexion Google, une fois activée, ne synchronisera pas tes documents.', 'Your projects stay on this device. Google sign-in, once enabled, will not sync your documents.')}</span>
             </div>
           )}
           <div className="row wrap" style={{ gap: 6, padding: '0 2px' }}>

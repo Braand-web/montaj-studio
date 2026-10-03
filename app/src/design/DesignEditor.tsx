@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, History, Scaling, Presentation, Download, Copy, Trash2, Lock, Unlock, ArrowUpToLine, ArrowDownToLine, Group, Ungroup, Component, CloudCheck, Plus, ChevronLeft, ChevronRight, Sparkles, Layers as LayersIcon, SlidersHorizontal, LayoutGrid, FlipHorizontal2, FlipVertical2, ZoomIn, ZoomOut, Maximize, ClipboardPaste, BringToFront, SendToBack, MousePointer2, Type as TypeIcon, AlignCenter, Paintbrush, ClipboardCheck } from 'lucide-react';
+import { Undo2, Redo2, History, Scaling, Presentation, Download, Copy, Trash2, Lock, Unlock, ArrowUpToLine, ArrowDownToLine, Group, Ungroup, Component, CloudCheck, Plus, ChevronLeft, ChevronRight, Sparkles, Layers as LayersIcon, SlidersHorizontal, LayoutGrid, FlipHorizontal2, FlipVertical2, ZoomIn, ZoomOut, Maximize, ClipboardPaste, BringToFront, SendToBack, MousePointer2, Type as TypeIcon, AlignCenter, Paintbrush, ClipboardCheck, Film } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useDesign, snapshot } from './store';
-import { getDoc } from '../lib/docs';
+import { getProjectDoc, restoreProjectData, addPageScene, detachLinkedPage } from '../lib/docs';
 import { preload } from '../lib/media';
-import type { DesignData } from '../model/types';
+import type { CreativeProjectData, DesignData, Doc } from '../model/types';
 import { Canvas } from './Canvas';
 import { LeftPanel, Rail, useImages, type LeftTab } from './LeftPanel';
 import { Inspector, Layers } from './Inspector';
@@ -17,6 +17,7 @@ import { LogoMark } from '../ui/kit';
 import { dimsLabel } from '../model/formats';
 import * as A from './actions';
 import { ContextMenu, type MenuEntry } from '../ui/ContextMenu';
+import { EditorModeTabs } from '../editor/EditorModeTabs';
 
 type RightTab = 'insp' | 'layers' | 'agent';
 
@@ -46,9 +47,10 @@ export function DesignEditor() {
     setReady(false);
     void (async () => {
       if (!docId) { go('home'); return; }
-      const d = await getDoc<DesignData>(docId);
+      const project = await getProjectDoc(docId);
       if (!alive) return;
-      if (!d) { notify(T('Document introuvable.', 'Document not found.'), 'err'); go('home'); return; }
+      if (!project) { notify(T('Document introuvable ou illisible.', 'Document not found or unreadable.'), 'err'); go('home'); return; }
+      const d = { ...project, data: project.data.design } as Doc<DesignData>;
       await preload(d.data.pages.flatMap((p) => p.els.map((e) => e.mediaId)));
       useDesign.getState().load(d);
       setReady(true);
@@ -120,7 +122,7 @@ export function DesignEditor() {
   const host = useMemo(() => designHost(), []);
 
   if (!ready || !doc) return <div className="row faint" style={{ height: '100%', justifyContent: 'center' }}><span className="pulse" />{T('Ouverture…', 'Opening…')}</div>;
-  if (narrow) return <DesignMobile onExport={() => setDialog('export')} dialog={dialog} setDialog={setDialog} />;
+  if (narrow) return <DesignMobile onExport={() => setDialog('export')} dialog={dialog} setDialog={setDialog} left={left} setLeft={setLeft} host={host} pending={pending} />;
 
   return (
     <div style={{ display: 'grid', gridTemplateRows: '48px minmax(0,1fr) 112px', height: '100%', minHeight: 560, position: 'relative' }}>
@@ -145,7 +147,12 @@ export function DesignEditor() {
       {dialog === 'resize' && <ResizeDialog onClose={() => setDialog(null)} />}
       {dialog === 'anim' && <AnimPreview page={useDesign.getState().page()} onClose={() => setDialog(null)} />}
       {dialog === 'present' && <Present pages={doc.data.pages} start={useDesign.getState().pageIdx} onClose={() => setDialog(null)} />}
-      {dialog === 'versions' && <VersionsPanel doc={doc} onClose={() => setDialog(null)} onRestore={(d) => useDesign.getState().apply((x) => { x.pages = (d as DesignData).pages; })} />}
+      {dialog === 'versions' && <VersionsPanel doc={doc} onClose={() => setDialog(null)} onRestore={async (d) => {
+        if ('schemaVersion' in d) {
+          const project = await restoreProjectData(doc.id, d as CreativeProjectData);
+          if (project) useDesign.getState().load({ ...project, data: project.data.design });
+        } else useDesign.getState().apply((x) => { x.pages = (d as DesignData).pages; });
+      }} />}
     </div>
   );
 }
@@ -168,6 +175,7 @@ function Header({ onDialog }: { onDialog(d: 'export' | 'resize' | 'versions' | '
         <input id="doc-name" className="ell" value={doc.name} onChange={(e) => useDesign.getState().rename(e.target.value)} style={{ fontWeight: 600, border: 0, background: 'transparent', outline: 'none', padding: 0, width: 240 }} />
         <span className="faint row" style={{ fontSize: 11, gap: 4 }}><CloudCheck size={11} color="var(--accTx)" />{T('Enregistré · sur cet appareil', 'Saved · on this device')}</span>
       </div>
+      <EditorModeTabs />
       <div style={{ width: 1, height: 20, background: 'var(--line2)', margin: '0 4px' }} />
       <button className="btn icon" disabled={!past || locked} onClick={() => useDesign.getState().undo()} title={T('Annuler (⌘Z)', 'Undo (⌘Z)')}><Undo2 size={14} /></button>
       <button className="btn icon" disabled={!future || locked} onClick={() => useDesign.getState().redo()} title={T('Rétablir (⌘⇧Z)', 'Redo (⌘⇧Z)')}><Redo2 size={14} /></button>
@@ -287,10 +295,12 @@ function Stage() {
 
 function PagesStrip() {
   const T = useT();
+  const notify = useApp((s) => s.notify);
+  const go = useApp((s) => s.go);
+  const docId = useApp((s) => s.docId);
   const pages = useDesign((s) => (s.draft ?? s.doc!.data).pages);
   const idx = useDesign((s) => s.pageIdx);
   const locked = useDesign((s) => !!s.draft || s.busy);
-  const notify = useApp((s) => s.notify);
   return (
     <div style={{ borderTop: '1px solid var(--line)', background: 'var(--panel)', display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', overflowX: 'auto' }}>
       {pages.map((p, i) => (
@@ -302,10 +312,19 @@ function PagesStrip() {
             <span style={{ marginRight: 'auto' }}>{i + 1}</span>
             {i === idx && !locked && (
               <>
+                <button className="btn bare icon" style={{ width: 18, height: 18, color: 'var(--accTx)' }} title={T('Ajouter cette page à la timeline', 'Add this page to the timeline')} onClick={async () => {
+                  if (!docId) return;
+                  try { await addPageScene(docId, p.id); notify(T('Scène liée ajoutée à la timeline.', 'Linked scene added to the timeline.')); go('video', docId); }
+                  catch (e) { notify((e as Error).message, 'err'); }
+                }}><Film size={11} /></button>
                 <button className="btn bare icon" style={{ width: 18, height: 18 }} title={T('Déplacer à gauche', 'Move left')} onClick={() => A.movePage(i, -1)}><ChevronLeft size={11} /></button>
                 <button className="btn bare icon" style={{ width: 18, height: 18 }} title={T('Déplacer à droite', 'Move right')} onClick={() => A.movePage(i, 1)}><ChevronRight size={11} /></button>
                 <button className="btn bare icon" style={{ width: 18, height: 18 }} title={T('Dupliquer la page', 'Duplicate page')} onClick={() => A.duplicatePage(i)}><Copy size={11} /></button>
-                <button className="btn bare icon" style={{ width: 18, height: 18 }} title={T('Supprimer la page', 'Delete page')} onClick={() => { if (!A.deletePage(i)) notify(T('Un document garde au moins une page.', 'A document keeps at least one page.'), 'err'); }}><Trash2 size={11} /></button>
+                <button className="btn bare icon" style={{ width: 18, height: 18 }} title={T('Supprimer la page', 'Delete page')} onClick={async () => {
+                  if (pages.length <= 1) { notify(T('Un document garde au moins une page.', 'A document keeps at least one page.'), 'err'); return; }
+                  if (docId) await detachLinkedPage(docId, p.id);
+                  A.deletePage(i);
+                }}><Trash2 size={11} /></button>
               </>
             )}
           </div>
@@ -316,14 +335,17 @@ function PagesStrip() {
   );
 }
 
-function DesignMobile({ onExport, dialog, setDialog }: { onExport(): void; dialog: string | null; setDialog(d: null | 'export'): void }) {
+function DesignMobile({ onExport, dialog, setDialog, left, setLeft, host, pending }: { onExport(): void; dialog: string | null; setDialog(d: null | 'export' | 'anim'): void; left: LeftTab; setLeft(v: LeftTab): void; host: ReturnType<typeof designHost>; pending: string | null }) {
   const T = useT();
   const go = useApp((s) => s.go);
+  const notify = useApp((s) => s.notify);
+  const docId = useApp((s) => s.docId);
   const doc = useDesign((s) => s.doc)!;
   const page = useDesign((s) => s.page());
   const sel = useDesign((s) => s.sel);
   const idx = useDesign((s) => s.pageIdx);
   const brand = useApp((s) => s.brand);
+  const [panel, setPanel] = useState<null | 'tools' | 'inspect' | 'layers' | 'agent'>(null);
   const cur = sel.length === 1 ? page.els.find((e) => e.id === sel[0]) : undefined;
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
@@ -332,6 +354,13 @@ function DesignMobile({ onExport, dialog, setDialog }: { onExport(): void; dialo
         <span className="grow ell" style={{ fontWeight: 600 }}>{doc.name}</span>
         <button className="btn icon" style={{ width: 36, height: 36 }} onClick={() => useDesign.getState().undo()} aria-label={T('Annuler', 'Undo')}><Undo2 size={14} /></button>
         <button className="btn primary" style={{ height: 36 }} onClick={onExport}><Download size={13} />{T('Exporter', 'Export')}</button>
+      </div>
+      <div className="row" style={{ flex: 'none', minHeight: 40, padding: '4px 10px', gap: 6, borderBottom: '1px solid var(--line)', background: 'var(--panel)', overflowX: 'auto' }}>
+        <EditorModeTabs />
+        <button className="btn sm" onClick={() => setPanel('tools')}>{T('Outils', 'Tools')}</button>
+        <button className="btn sm" onClick={() => setPanel('inspect')}>{T('Inspecteur', 'Inspector')}</button>
+        <button className="btn sm" onClick={() => setPanel('layers')}>{T('Calques', 'Layers')}</button>
+        <button className="btn sm" onClick={() => setPanel('agent')}>{T('Assistant', 'Assistant')}</button>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, containerType: 'size' }}>
         <Canvas page={page} />
@@ -353,15 +382,35 @@ function DesignMobile({ onExport, dialog, setDialog }: { onExport(): void; dialo
           </button>
         ))}
       </div>
-      <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderTop: '1px solid var(--line)', background: 'var(--panel)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div style={{ flex: 'none', display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', borderTop: '1px solid var(--line)', background: 'var(--panel)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <button className="btn bare" style={{ height: 56, color: 'var(--tx)' }} onClick={() => A.addText('title')}>{T('+ Texte', '+ Text')}</button>
         <label className="btn bare" style={{ height: 56, color: 'var(--tx)', cursor: 'pointer' }}>{T('+ Photo', '+ Photo')}
           <input type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files; if (!f?.length) return; const { importFiles } = await import('../lib/media'); const { ok } = await importFiles(f); ok.forEach((m) => A.addImageFromMedia(m)); e.target.value = ''; }} />
         </label>
         <button className="btn bare" style={{ height: 56, color: 'var(--tx)' }} onClick={() => { const cs = brand.colors; const i = cs.indexOf(page.bg); A.setPageBg(cs[(i + 1) % cs.length]); }}>{T('Fond', 'Background')}</button>
         <button className="btn bare" style={{ height: 56, color: 'var(--tx)' }} onClick={() => A.addPage()}>{T('+ Page', '+ Page')}</button>
+        <button className="btn bare" style={{ height: 56, color: 'var(--tx)' }} onClick={async () => {
+          if (!docId) return;
+          try { await addPageScene(docId, page.id); notify(T('Scène liée ajoutée à la timeline.', 'Linked scene added to the timeline.')); go('video', docId); }
+          catch (e) { notify((e as Error).message, 'err'); }
+        }}><Film size={13} />{T('Vidéo', 'Video')}</button>
+        <button className="btn bare" style={{ height: 56, color: 'var(--warn)' }} disabled={doc.data.pages.length <= 1} onClick={async () => {
+          if (docId) await detachLinkedPage(docId, page.id);
+          const i = useDesign.getState().pageIdx;
+          if (!A.deletePage(i)) notify(T('Un document garde au moins une page.', 'A document keeps at least one page.'), 'err');
+        }}>{T('Supprimer', 'Delete')}</button>
       </div>
+      {panel && <div className="overlay" style={{ zIndex: 45, padding: 10 }} onPointerDown={(e) => { if (e.target === e.currentTarget) setPanel(null); }}>
+        <div className="col" style={{ width: '100%', height: 'min(82dvh,720px)', background: 'var(--panel)', border: '1px solid var(--line2)', borderRadius: 16, overflow: 'hidden' }}>
+          <div className="row" style={{ height: 44, flex: 'none', padding: '0 12px', borderBottom: '1px solid var(--line)' }}><strong className="grow">{{ tools: T('Outils', 'Tools'), inspect: T('Inspecteur', 'Inspector'), layers: T('Calques', 'Layers'), agent: T('Assistant', 'Assistant') }[panel]}</strong><button className="btn" onClick={() => setPanel(null)}>{T('Fermer', 'Close')}</button></div>
+          <div style={{ display: panel === 'tools' ? 'grid' : 'none', gridTemplateColumns: '64px minmax(0,1fr)', flex: 1, minHeight: 0 }}><Rail tab={left} setTab={setLeft} /><LeftPanel tab={left} /></div>
+          <div style={{ display: panel === 'inspect' ? 'flex' : 'none', flex: 1, minHeight: 0, overflow: 'auto' }}><Inspector onPreviewAnim={() => setDialog('anim')} /></div>
+          {panel === 'layers' && <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}><Layers /></div>}
+          {panel === 'agent' && <div style={{ flex: 1, minHeight: 0 }}><Composer host={host} autoPrompt={pending} /></div>}
+        </div>
+      </div>}
       {dialog === 'export' && <ExportDesign onClose={() => setDialog(null)} />}
+      {dialog === 'anim' && <AnimPreview page={page} onClose={() => setDialog(null)} />}
     </div>
   );
 }

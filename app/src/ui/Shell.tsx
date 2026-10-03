@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { House, Images, LayoutTemplate, Table2, CalendarDays, Palette, KeyRound, Trash2, Settings, Search, Clapperboard, Image as ImageIcon, Sparkles, CreditCard, Lightbulb, Users, ChartNoAxesColumn, Shield, Bell, PenTool, Film, ChevronsUpDown, MessageSquare, Menu, X } from 'lucide-react';
+import { House, Images, LayoutTemplate, Table2, CalendarDays, Palette, KeyRound, Trash2, Settings, Search, Clapperboard, Image as ImageIcon, Sparkles, CreditCard, Lightbulb, Users, ChartNoAxesColumn, Shield, Bell, Film, ChevronsUpDown, MessageSquare, Menu, X } from 'lucide-react';
 import { useApp, useT, type Screen } from '../store/app';
-import { listDocs, onDocsChange, createDoc } from '../lib/docs';
+import { listDocs, onDocsChange, createProjectDoc } from '../lib/docs';
 import type { DocMeta, DesignData } from '../model/types';
 import { estimate, persistent, get } from '../lib/db';
 import { bytes, uid } from '../lib/util';
@@ -13,14 +13,13 @@ import { emptyVideo } from '../lib/create';
 import { fmt } from '../model/formats';
 import { InstallPwaButton } from './InstallPwaButton';
 
-type NavId = Screen | 'open-video' | 'open-design';
+type NavId = Screen | 'open-editor';
 export interface NavItem { id: NavId; fr: string; en: string; c: string; I: typeof House }
 
 export const NAV: NavItem[] = [
   { id: 'home', fr: 'Accueil', en: 'Home', c: '#0A84FF', I: House },
   { id: 'chat', fr: 'Studio Chat', en: 'Studio Chat', c: 'linear-gradient(135deg,#0A84FF,#BF5AF2)', I: Sparkles },
-  { id: 'open-video', fr: 'Éditeur vidéo', en: 'Video editor', c: '#1F5FBF', I: Film },
-  { id: 'open-design', fr: 'Éditeur design', en: 'Design editor', c: '#C98A0A', I: PenTool },
+  { id: 'open-editor', fr: 'Éditeur', en: 'Editor', c: '#0A84FF', I: Film },
   { id: 'credits', fr: 'Crédits', en: 'Credits', c: '#30D158', I: CreditCard },
   { id: 'templates', fr: 'Templates', en: 'Templates', c: '#FF9F0A', I: LayoutTemplate },
   { id: 'feedback', fr: 'Idées & bugs', en: 'Ideas & bugs', c: '#FFD60A', I: Lightbulb },
@@ -50,23 +49,23 @@ export function useDocs() {
 // Opens the most recent document of a kind, or creates one so the editor is one click away.
 export async function openEditor(kind: 'video' | 'design') {
   const app = useApp.getState();
-  const last = (await listDocs()).find((d) => d.kind === kind && !d.trashedAt);
-  if (last) { app.go(kind, last.id); return; }
+  const mode = kind === 'video' ? 'timeline' : 'pages';
+  const last = (await listDocs()).find((d) => !d.trashedAt && (d.mode === mode || (d.kind === kind && !d.mode)));
+  if (last) { app.go(mode === 'timeline' ? 'video' : 'design', last.id); return; }
   if (kind === 'video') {
     const f = fmt('v-tiktok');
-    const d = await createDoc('video', app.lang === 'fr' ? 'Nouvelle vidéo' : 'New video', f.dims, emptyVideo(f.w, f.h));
+    const d = await createProjectDoc('timeline', app.lang === 'fr' ? 'Nouveau projet' : 'New project', f.dims, emptyVideo(f.w, f.h));
     app.go('video', d.id);
   } else {
     const f = fmt('ig-45');
     const data: DesignData = { pages: [{ id: uid('p'), w: f.w, h: f.h, bg: '#FFFFFF', els: [] }] };
-    const d = await createDoc('design', app.lang === 'fr' ? 'Nouveau design' : 'New design', f.dims, data);
+    const d = await createProjectDoc('pages', app.lang === 'fr' ? 'Nouveau projet' : 'New project', f.dims, data);
     app.go('design', d.id);
   }
 }
 
 export function goNav(id: NavId) {
-  if (id === 'open-video') void openEditor('video');
-  else if (id === 'open-design') void openEditor('design');
+  if (id === 'open-editor') void openEditor('design');
   else useApp.getState().go(id);
 }
 
@@ -131,7 +130,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <nav ref={navRef} className="col" style={{ gap: 2, position: 'relative' }}>
           <span className="nav-ind" style={{ transform: `translateY(${ind.y}px)`, height: ind.h, opacity: ind.h ? 1 : 0 }} />
           {nav.map((n) => {
-            const on = screen === n.id || (n.id === 'open-video' && screen === 'video') || (n.id === 'open-design' && screen === 'design');
+            const on = screen === n.id || (n.id === 'open-editor' && screen === 'editor');
             const nt = note(n);
             return (
               <button key={n.id} data-on={on || undefined} onClick={() => goNav(n.id)} className="row nav-item" style={{ justifyContent: 'space-between', height: 34, padding: '0 10px', border: 0, borderRadius: 10, background: 'transparent', position: 'relative', zIndex: 1, color: on ? 'var(--tx)' : 'var(--tx2)', fontSize: 13, fontWeight: 500, textAlign: 'left' }}>
@@ -147,8 +146,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="col" style={{ gap: 2 }}>
           <span className="eyebrow" style={{ padding: '0 10px 6px' }}>{T('Récents', 'Recent')}</span>
           {recent.map((d) => (
-            <button key={d.id} onClick={() => go(d.kind === 'video' ? 'video' : 'design', d.id)} className="row" style={{ gap: 10, height: 32, padding: '0 10px', border: 0, borderRadius: 10, background: 'transparent', color: 'var(--tx2)', fontSize: 12, textAlign: 'left' }}>
-              {d.kind === 'video' ? <Clapperboard size={13} color="#4DA3FF" style={{ flex: 'none' }} /> : <ImageIcon size={13} color="#FF9F0A" style={{ flex: 'none' }} />}<span className="ell">{d.name}</span>
+            <button key={d.id} onClick={() => go(d.mode === 'timeline' || d.kind === 'video' ? 'video' : 'design', d.id)} className="row" style={{ gap: 10, height: 32, padding: '0 10px', border: 0, borderRadius: 10, background: 'transparent', color: 'var(--tx2)', fontSize: 12, textAlign: 'left' }}>
+              {d.mode === 'timeline' || d.kind === 'video' ? <Clapperboard size={13} color="#4DA3FF" style={{ flex: 'none' }} /> : <ImageIcon size={13} color="#FF9F0A" style={{ flex: 'none' }} />}<span className="ell">{d.name}</span>
             </button>
           ))}
           {lastChat && <button onClick={() => go('chat')} className="row" style={{ gap: 10, height: 32, padding: '0 10px', border: 0, borderRadius: 10, background: 'transparent', color: 'var(--tx2)', fontSize: 12, textAlign: 'left' }}><MessageSquare size={13} color="#BF5AF2" style={{ flex: 'none' }} /><span className="ell">{lastChat}</span></button>}
@@ -200,8 +199,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
 
   if (narrow) {
-    const tabs: NavItem[] = ['home', 'chat', 'open-video', 'open-design'].map((k) => NAV.find((n) => n.id === k)!);
-    const isOn = (n: NavItem) => screen === n.id || (n.id === 'open-video' && screen === 'video') || (n.id === 'open-design' && screen === 'design');
+    const tabs: NavItem[] = ['home', 'chat', 'open-editor', 'library'].map((k) => NAV.find((n) => n.id === k)!);
+    const isOn = (n: NavItem) => screen === n.id || (n.id === 'open-editor' && screen === 'editor');
     const current = nav.find(isOn);
     return (
       <div style={{ display: 'grid', gridTemplateRows: '52px minmax(0,1fr) auto', height: '100%' }}>
@@ -215,7 +214,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <main ref={mainRef} style={{ minWidth: 0, overflow: 'auto' }}>{children}</main>
         <nav className="tabbar" aria-label={T('Navigation principale', 'Main navigation')}>
           {tabs.map((n) => (
-            <button key={n.id} className={'tab press' + (isOn(n) ? ' on' : '')} onClick={() => goNav(n.id)}><n.I size={19} /><span>{{ home: T('Accueil', 'Home'), chat: 'Chat', 'open-video': T('Vidéo', 'Video'), 'open-design': 'Design' }[n.id as string]}</span></button>
+            <button key={n.id} className={'tab press' + (isOn(n) ? ' on' : '')} onClick={() => goNav(n.id)}><n.I size={19} /><span>{{ home: T('Accueil', 'Home'), chat: 'Chat', 'open-editor': T('Éditeur', 'Editor'), library: T('Médiathèque', 'Media') }[n.id as string]}</span></button>
           ))}
           <button className={'tab press' + (!tabs.some(isOn) ? ' on' : '')} onClick={() => setDrawer(true)}><Menu size={19} /><span>{T('Plus', 'More')}</span></button>
         </nav>

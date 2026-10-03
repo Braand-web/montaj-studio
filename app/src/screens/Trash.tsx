@@ -20,7 +20,7 @@ export function Trash() {
           {items.map((d) => (
             <div key={d.id} className="row wrap" style={{ gap: 14, padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
               <div className={d.thumb ? '' : 'stripes'} style={{ width: 72, aspectRatio: '16/10', borderRadius: 10, border: '1px solid var(--line)', background: d.thumb ? `url(${d.thumb}) center/contain no-repeat, var(--panel2)` : undefined, flex: 'none' }} />
-              <div className="col grow" style={{ minWidth: 160, gap: 2 }}><span style={{ fontWeight: 500 }}>{d.name}</span><span className="faint" style={{ fontSize: 12 }}>{d.kind === 'video' ? T('Vidéo', 'Video') : 'Design'} · {left(d.trashedAt!)} {T('jours restants', 'days left')}</span></div>
+              <div className="col grow" style={{ minWidth: 160, gap: 2 }}><span style={{ fontWeight: 500 }}>{d.name}</span><span className="faint" style={{ fontSize: 12 }}>{d.mode === 'timeline' || d.kind === 'video' ? T('Vidéo', 'Video') : T('Pages', 'Pages')} · {left(d.trashedAt!)} {T('jours restants', 'days left')}</span></div>
               <button className="btn" onClick={async () => { await restoreDoc(d.id); notify(T('Document restauré.', 'Document restored.')); }}>{T('Restaurer', 'Restore')}</button>
               <button className="btn danger" onClick={() => setPurge(d.id)}>{T('Supprimer définitivement', 'Delete forever')}</button>
             </div>

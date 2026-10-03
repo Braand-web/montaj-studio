@@ -1,4 +1,4 @@
-import type { Caption, CapStyle, Clip, VideoData } from '../model/types';
+import type { Caption, CapStyle, Clip, Page, VideoData } from '../model/types';
 import { mediaUrl, mediaUrlSync, loadImage } from '../lib/media';
 import { fontCss } from '../model/fonts';
 import { wrapText } from '../design/render';
@@ -6,6 +6,7 @@ import { duration } from './store';
 import { clamp } from '../lib/util';
 import { transformAt } from './keyframes';
 import { shapePath } from '../design/shapes';
+import { renderPage } from '../design/render';
 
 // Browser compositor (SPEC §3.8): decodes the user's media with <video>/<audio> elements,
 // composites every frame on a 2D canvas, and plays audio through Web Audio so the same
@@ -18,6 +19,7 @@ export class Engine {
   data: VideoData;
   private els = new Map<string, MediaEl>();
   private imgs = new Map<string, HTMLImageElement | null>();
+  private pageCanvases = new Map<string, HTMLCanvasElement>();
   private actx: AudioContext | null = null;
   private dest: MediaStreamAudioDestinationNode | null = null;
   private routed = new WeakSet<MediaEl>();
@@ -161,9 +163,28 @@ export class Engine {
     void this.actx?.close();
   }
 
-  draw() { this.drawTo(this.canvas, this.t); }
+  private drawing = false;
+  private drawPending = false;
+  draw() {
+    this.drawPending = true;
+    if (this.drawing) return;
+    this.drawing = true;
+    void (async () => {
+      try {
+        while (this.drawPending) {
+          this.drawPending = false;
+          await this.drawTo(this.canvas, this.t);
+        }
+      } catch (error) {
+        console.error('Timeline frame could not be rendered.', error);
+        this.drawPending = false;
+      } finally {
+        this.drawing = false;
+      }
+    })();
+  }
 
-  drawTo(canvas: HTMLCanvasElement, t: number) {
+  async drawTo(canvas: HTMLCanvasElement, t: number) {
     const { w: W, h: H } = this.data;
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
     const ctx = canvas.getContext('2d')!;
@@ -176,11 +197,52 @@ export class Engine {
     for (const tr of VISUAL_ORDER) {
       for (const c of act.filter((x) => x.track === tr)) {
         if (c.kind === 'text') this.drawText(ctx, c, t, W, H);
+        else if (c.kind === 'page') await this.drawPage(ctx, c, t, W, H);
         else if (c.kind === 'video' || c.kind === 'image') this.drawVisual(ctx, c, t, W, H);
       }
     }
     const cap = this.data.captions.find((c) => t >= c.start && t < c.end);
     if (cap) drawCaption(ctx, cap, t, this.data.capStyle, this.data.capY, W, H);
+  }
+
+  private async drawPage(ctx: CanvasRenderingContext2D, c: Clip, t: number, W: number, H: number) {
+    const page: Page | undefined = this.data.pageSources?.find((p) => p.id === c.pageId);
+    if (!page) return;
+    let canvas = this.pageCanvases.get(page.id);
+    if (!canvas) { canvas = document.createElement('canvas'); this.pageCanvases.set(page.id, canvas); }
+    const local = t - c.start;
+    await renderPage(page, Math.min(W, 960), { t: local, canvas });
+    const fit = Math.min(W / page.w, H / page.h); // linked pages are always contained, never cropped
+    const tf = transformAt(c, local);
+    let alpha = tf.opacity, scale = tf.scale, dx = tf.x / 100 * W, dy = tf.y / 100 * H, blur = 0, dip = 0;
+    if (c.trIn && local < c.trIn.dur) {
+      const p = clamp(local / c.trIn.dur, 0, 1), ease = 1 - Math.pow(1 - p, 3);
+      if (c.trIn.type === 'fade') alpha *= ease;
+      if (c.trIn.type === 'dip') dip = 1 - ease;
+      if (c.trIn.type === 'slide') dx += (1 - ease) * W;
+      if (c.trIn.type === 'zoom') { scale *= 1.25 - 0.25 * ease; alpha *= ease; }
+      if (c.trIn.type === 'blur') blur = (1 - ease) * 24;
+    }
+    if (c.trOut && c.dur - local < c.trOut.dur) {
+      const p = clamp((c.dur - local) / c.trOut.dur, 0, 1);
+      if (c.trOut.type === 'fade') alpha *= p; else dip = Math.max(dip, 1 - p);
+    }
+    const dw = page.w * fit * scale, dh = page.h * fit * scale;
+    ctx.save();
+    ctx.globalAlpha = clamp(alpha, 0, 1);
+    ctx.globalCompositeOperation = c.blend && c.blend !== 'normal' ? c.blend : 'source-over';
+    ctx.filter = fxFilter(c, blur);
+    ctx.translate(W / 2 + dx, H / 2 + dy);
+    if (tf.rot) ctx.rotate((tf.rot * Math.PI) / 180);
+    if (c.mask && c.mask !== 'none') {
+      const m = Math.min(dw, dh);
+      if (c.mask === 'circle') { ctx.beginPath(); ctx.ellipse(0, 0, m / 2, m / 2, 0, 0, Math.PI * 2); ctx.clip(); }
+      else if (c.mask === 'rounded') { roundRect(ctx, -dw / 2, -dh / 2, dw, dh, m * 0.12); ctx.clip(); }
+      else { const p = new Path2D(); p.addPath(new Path2D(shapePath(c.mask, m, m)), new DOMMatrix().translate(-m / 2, -m / 2)); ctx.clip(p); }
+    }
+    ctx.drawImage(canvas, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+    if (dip > 0) { ctx.fillStyle = `rgba(0,0,0,${dip})`; ctx.fillRect(0, 0, W, H); }
   }
 
   private drawVisual(ctx: CanvasRenderingContext2D, c: Clip, t: number, W: number, H: number) {
@@ -340,7 +402,7 @@ export class Engine {
   }
 
   // Real-time export: plays the timeline from 0 and records canvas + audio.
-  async exportTo(canvas: HTMLCanvasElement, record: (dur: number, draw: (t: number) => void, audio?: MediaStream) => Promise<Blob>): Promise<Blob> {
+  async exportTo(canvas: HTMLCanvasElement, record: (dur: number, draw: (t: number) => Promise<void>, audio?: MediaStream) => Promise<Blob>): Promise<Blob> {
     this.pause();
     this.ensureAudio();
     await this.actx?.resume();
@@ -351,10 +413,10 @@ export class Engine {
     for (const el of this.els.values()) this.route(el);
     let started = false;
     try {
-      return await record(dur, (t) => {
+      return await record(dur, async (t) => {
         if (!started) { started = true; }
         this.syncMedia(t, true);
-        this.drawTo(canvas, t);
+        await this.drawTo(canvas, t);
       }, this.dest?.stream);
     } finally {
       for (const el of this.els.values()) el.pause();

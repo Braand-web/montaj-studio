@@ -17,7 +17,7 @@ type Drag =
   | { kind: 'cap'; id: string; dx0: number; orig: { start: number; end: number } }
   | { kind: 'seek' };
 
-export function Timeline({ onSeek }: { onSeek(t: number): void }) {
+export function Timeline({ onSeek, compact = false }: { onSeek(t: number): void; compact?: boolean }) {
   const T = useT();
   const data = useVideo((s) => s.view());
   const sel = useVideo((s) => s.sel);
@@ -147,7 +147,7 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
       { label: T('Aller au début du clip', 'Go to clip start'), icon: <SkipForward size={13} />, go: () => onSeek(c.start) },
       'sep',
       ...(hasAudio ? [{ label: c.muted ? T('Réactiver le son', 'Unmute') : T('Couper le son', 'Mute'), icon: c.muted ? <Volume2 size={13} /> : <VolumeX size={13} />, go: () => V.update(id, { muted: !c.muted }) }] : []),
-      ...(c.kind !== 'text' ? [{ label: T('Vitesse ×2', 'Speed ×2'), icon: <Gauge size={13} />, go: () => { const old = c.speed ?? 1; const v = old === 2 ? 1 : 2; V.update(id, { speed: v, dur: Math.round(((c.dur * old) / v) * 100) / 100 }); } }] : []),
+      ...(c.kind !== 'text' && c.kind !== 'page' ? [{ label: T('Vitesse ×2', 'Speed ×2'), icon: <Gauge size={13} />, go: () => { const old = c.speed ?? 1; const v = old === 2 ? 1 : 2; V.update(id, { speed: v, dur: Math.round(((c.dur * old) / v) * 100) / 100 }); } }] : []),
       { label: T('Combler les vides de la piste', 'Close gaps on this track'), icon: <BetweenHorizontalStart size={13} />, go: () => V.closeGaps(c.track) },
       'sep',
       { label: T('Supprimer et refermer', 'Ripple delete'), icon: <Eraser size={13} />, kbd: '⇧Suppr', go: () => V.rippleDelete(id), danger: true },
@@ -156,32 +156,32 @@ export function Timeline({ onSeek }: { onSeek(t: number): void }) {
   };
 
   return (
-    <section style={{ borderTop: '1px solid var(--line)', background: 'var(--panel)', display: 'grid', gridTemplateRows: '34px minmax(0,1fr)', minHeight: 0 }}>
-      <div className="row" style={{ gap: 6, padding: '0 10px', borderBottom: '1px solid var(--line)' }}>
+    <section style={{ borderTop: '1px solid var(--line)', background: 'var(--panel)', display: 'grid', gridTemplateRows: '34px minmax(0,1fr)', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      <div className="row" style={{ gap: 6, padding: '0 10px', borderBottom: '1px solid var(--line)', minWidth: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
         {tools.map((x) => (
-          <button key={x.k} className="btn sm" disabled={locked || ((x.k === 'S' || x.k.startsWith('Suppr') || x.k === 'Del') && !sel)} onClick={x.go}>
-            <x.I size={12} />{x.l} <span className="mono faint" style={{ fontSize: 10 }}>{x.k}</span>
+          <button key={x.k} className="btn sm" aria-label={x.l} title={x.l} disabled={locked || ((x.k === 'S' || x.k.startsWith('Suppr') || x.k === 'Del') && !sel)} onClick={x.go}>
+            <x.I size={12} />{!compact && <>{x.l} <span className="mono faint" style={{ fontSize: 10 }}>{x.k}</span></>}
           </button>
         ))}
- <button className="btn sm" disabled={locked || !sel} onClick={() => sel && V.duplicate(sel)} title="⌘D"><Copy size={12} />{T('Dupliquer', 'Duplicate')}</button>
-        <button className="btn sm" disabled={locked} onClick={() => V.closeGaps('video')} title={T('Colle les clips de la piste vidéo les uns aux autres', 'Packs the video track clips together')}><BetweenHorizontalStart size={12} />{T('Combler les vides', 'Close gaps')}</button>
+        <button className="btn sm" aria-label={T('Dupliquer', 'Duplicate')} disabled={locked || !sel} onClick={() => sel && V.duplicate(sel)} title="⌘D"><Copy size={12} />{!compact && T('Dupliquer', 'Duplicate')}</button>
+        <button className="btn sm" aria-label={T('Combler les vides', 'Close gaps')} disabled={locked} onClick={() => V.closeGaps('video')} title={T('Colle les clips de la piste vidéo les uns aux autres', 'Packs the video track clips together')}><BetweenHorizontalStart size={12} />{!compact && T('Combler les vides', 'Close gaps')}</button>
         {draft && <span className="acc" style={{ marginLeft: 10, fontSize: 11 }}>{T("Proposition de l'assistant · contours pointillés = changements", "Assistant's proposal · dashed outlines = changes")}</span>}
         <div className="grow" />
         <button className={'btn bare icon' + (snapOn ? ' on-acc' : '')} aria-pressed={snapOn} onClick={() => useVideo.getState().setSnap(!snapOn)} title={snapOn ? T('Magnétisme activé', 'Snapping on') : T('Magnétisme désactivé', 'Snapping off')}><Magnet size={14} /></button>
         <button className="btn bare icon" onClick={fit} title={T('Ajuster la timeline', 'Fit timeline')}><Maximize2 size={14} /></button>
-        <input className="range" type="range" aria-label={T('Zoom de la timeline', 'Timeline zoom')} min={0} max={100} value={Math.round((Math.log(pps / 4) / Math.log(100)) * 100)} onChange={(e) => useVideo.getState().setPps(4 * Math.pow(100, Number(e.target.value) / 100))} style={{ width: 90 }} />
+        <input className="range" type="range" aria-label={T('Zoom de la timeline', 'Timeline zoom')} min={0} max={100} value={Math.round((Math.log(pps / 4) / Math.log(100)) * 100)} onChange={(e) => useVideo.getState().setPps(4 * Math.pow(100, Number(e.target.value) / 100))} style={{ width: compact ? 55 : 90, flex: 'none' }} />
         <button className="btn bare icon" onClick={() => useVideo.getState().setPps(pps / 1.5)} title={T('Dézoomer', 'Zoom out')}><ZoomOut size={14} /></button>
         <button className="btn bare icon" onClick={() => useVideo.getState().setPps(pps * 1.5)} title={T('Zoomer', 'Zoom in')}><ZoomIn size={14} /></button>
         <span className="mono muted" style={{ fontSize: 11 }}>{mmss(dur)}</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '128px minmax(0,1fr)', minHeight: 0, overflow: 'auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `${compact ? 74 : 128}px minmax(0,1fr)`, minHeight: 0, minWidth: 0, overflow: 'auto' }}>
         <div style={{ borderRight: '1px solid var(--line)', display: 'flex', flexDirection: 'column', position: 'sticky', left: 0, background: 'var(--panel)', zIndex: 3 }}>
           <div style={{ height: RULER, borderBottom: '1px solid var(--line)', flex: 'none' }} />
           {TRACKS.map((tr) => {
             const I = ICONS[tr.icon];
-            return <div key={tr.id} className="row muted" style={{ height: ROW, flex: 'none', padding: '0 10px', borderBottom: '1px solid var(--line)', fontSize: 11, gap: 6 }}><I size={12} color="var(--tx3)" />{T(tr.fr, tr.en)}</div>;
+            return <div key={tr.id} title={T(tr.fr, tr.en)} className="row muted" style={{ height: ROW, flex: 'none', padding: compact ? '0 8px' : '0 10px', borderBottom: '1px solid var(--line)', fontSize: 11, gap: 6, whiteSpace: 'nowrap', overflow: 'hidden' }}><I size={12} color="var(--tx3)" />{!compact && T(tr.fr, tr.en)}</div>;
           })}
-          <div className="row muted" style={{ height: ROW, flex: 'none', padding: '0 10px', borderBottom: '1px solid var(--line)', fontSize: 11, gap: 6 }}><Captions size={12} color="var(--tx3)" />{T('Sous-titres', 'Captions')}</div>
+          <div className="row muted" title={T('Sous-titres', 'Captions')} style={{ height: ROW, flex: 'none', padding: compact ? '0 8px' : '0 10px', borderBottom: '1px solid var(--line)', fontSize: 11, gap: 6, whiteSpace: 'nowrap', overflow: 'hidden' }}><Captions size={12} color="var(--tx3)" />{!compact && T('Sous-titres', 'Captions')}</div>
         </div>
         <div ref={scroller} style={{ minWidth: 0 }} onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); useVideo.getState().setPps(pps * (e.deltaY < 0 ? 1.15 : 0.87)); } }}>
           <div ref={body} style={{ position: 'relative', width, minWidth: '100%' }} onPointerMove={(e) => setHover(timeAt(e.clientX))} onPointerLeave={() => setHover(null)}>

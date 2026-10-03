@@ -1,31 +1,39 @@
 import { create } from 'zustand';
 import { flushSync } from 'react-dom';
 import { get, prefs, put } from '../lib/db';
-import type { BrandKit } from '../model/types';
+import { patchDoc } from '../lib/docs';
+import type { BrandKit, EditorMode } from '../model/types';
 
 export const APP_NAME = 'Montaj Studio';
 
 export type Screen =
   | 'onboarding' | 'home' | 'chat' | 'credits' | 'feedback' | 'library' | 'templates' | 'bulk' | 'planner' | 'team' | 'brand'
-  | 'providers' | 'usage' | 'trash' | 'settings' | 'admin' | 'legal' | 'design' | 'video' | 'site';
+  | 'providers' | 'usage' | 'trash' | 'settings' | 'admin' | 'legal' | 'editor' | 'design' | 'video' | 'site';
 
-const SCREENS: Screen[] = ['onboarding', 'home', 'chat', 'credits', 'feedback', 'library', 'templates', 'bulk', 'planner', 'team', 'brand', 'providers', 'usage', 'trash', 'settings', 'admin', 'legal', 'design', 'video', 'site'];
+const SCREENS: Screen[] = ['onboarding', 'home', 'chat', 'credits', 'feedback', 'library', 'templates', 'bulk', 'planner', 'team', 'brand', 'providers', 'usage', 'trash', 'settings', 'admin', 'legal', 'editor', 'design', 'video', 'site'];
 
 // Hash routes (#/templates, #/design/<id>) so the browser back/forward buttons and reloads work.
-function parseHash(): { screen: Screen; docId: string | null } | null {
+function parseHash(): { screen: Screen; docId: string | null; editorMode?: 'pages' | 'timeline' } | null {
   try {
-    const [a, b] = location.hash.replace(/^#\/?/, '').split('?')[0].split('/');
+    const [path, query = ''] = location.hash.replace(/^#\/?/, '').split('?');
+    const [a, b] = path.split('/');
     if (!SCREENS.includes(a as Screen)) return null;
     if ((a === 'design' || a === 'video') && !b) return null;
-    return { screen: a as Screen, docId: b ? decodeURIComponent(b) : null };
+    if (a === 'design' || a === 'video') return { screen: 'editor', docId: decodeURIComponent(b), editorMode: a === 'video' ? 'timeline' : 'pages' };
+    const mode = new URLSearchParams(query).get('mode');
+    return { screen: a as Screen, docId: b ? decodeURIComponent(b) : null, editorMode: mode === 'timeline' ? 'timeline' : 'pages' };
   } catch { return null; }
 }
-const hashOf = (screen: Screen, docId: string | null) => '#/' + screen + (docId && (screen === 'design' || screen === 'video') ? '/' + encodeURIComponent(docId) : '');
-function writeHistory(screen: Screen, docId: string | null, replace = false) {
+const hashOf = (screen: Screen, docId: string | null, editorMode: 'pages' | 'timeline') => {
+  if (screen === 'design' || screen === 'video') return '#/editor/' + encodeURIComponent(docId ?? '') + '?mode=' + (screen === 'video' ? 'timeline' : 'pages');
+  if (screen === 'editor') return '#/editor/' + encodeURIComponent(docId ?? '') + '?mode=' + editorMode;
+  return '#/' + screen;
+};
+function writeHistory(screen: Screen, docId: string | null, editorMode: 'pages' | 'timeline', replace = false) {
   try {
-    const h = hashOf(screen, docId);
+    const h = hashOf(screen, docId, editorMode);
     if (!replace && location.hash === h) return;
-    history[replace ? 'replaceState' : 'pushState']({ screen, docId }, '', h);
+    history[replace ? 'replaceState' : 'pushState']({ screen: screen === 'design' || screen === 'video' ? 'editor' : screen, docId, editorMode: screen === 'video' ? 'timeline' : screen === 'design' ? 'pages' : editorMode }, '', h);
   } catch { /* sandboxed history */ }
 }
 
@@ -55,6 +63,7 @@ interface Toast { id: number; text: string; kind: 'ok' | 'err' | 'info' }
 interface AppState {
   screen: Screen;
   docId: string | null;
+  editorMode: 'pages' | 'timeline';
   lang: Lang;
   mode: Mode;
   userName: string;
@@ -68,6 +77,7 @@ interface AppState {
   palOpen: boolean;
   pendingPrompt: string | null;
   go(screen: Screen, docId?: string | null): void;
+  setEditorMode(mode: EditorMode): void;
   setLang(l: Lang): void;
   toggleLang(): void;
   setMode(m: Mode): void;
@@ -83,6 +93,7 @@ export const useApp = create<AppState>((setS, getS) => ({
   // First visit lands on the public site; returning users go straight to their home.
   screen: (prefs.get('onboarded', false) && parseHash()?.screen) || (prefs.get('onboarded', false) ? 'home' : 'site'),
   docId: prefs.get('onboarded', false) ? parseHash()?.docId ?? null : null,
+  editorMode: parseHash()?.editorMode ?? 'pages',
   lang: initialLang,
   mode: prefs.get<Mode>('mode', 'system'),
   userName: prefs.get('userName', ''),
@@ -96,10 +107,20 @@ export const useApp = create<AppState>((setS, getS) => ({
   palOpen: false,
   pendingPrompt: null,
   go(screen, docId = null) {
-    const next = { screen, docId: docId ?? (screen === 'design' || screen === 'video' ? getS().docId : null) };
-    if (next.screen === getS().screen && next.docId === getS().docId) return;
+    const current = getS();
+    const editorMode = screen === 'video' ? 'timeline' : screen === 'design' ? 'pages' : screen === 'editor' ? current.editorMode : current.editorMode;
+    const actualScreen = screen === 'video' || screen === 'design' ? 'editor' : screen;
+    const next = { screen: actualScreen, docId: docId ?? (actualScreen === 'editor' ? current.docId : null), editorMode };
+    if (next.screen === current.screen && next.docId === current.docId && next.editorMode === current.editorMode) return;
     withTransition(() => setS(next));
-    writeHistory(next.screen, next.docId);
+    writeHistory(next.screen, next.docId, next.editorMode);
+  },
+  setEditorMode(editorMode) {
+    const current = getS();
+    if (current.screen !== 'editor' || current.editorMode === editorMode) return;
+    withTransition(() => setS({ editorMode }));
+    writeHistory('editor', current.docId, editorMode);
+    if (current.docId) void patchDoc(current.docId, { mode: editorMode });
   },
   setLang(l) { prefs.set('lang', l); setS({ lang: l }); },
   toggleLang() { getS().setLang(getS().lang === 'fr' ? 'en' : 'fr'); },
@@ -140,11 +161,11 @@ export const tNow = (fr: string, en: string) => (useApp.getState().lang === 'fr'
 // Keep the URL in sync with the first screen, then follow the browser's back/forward buttons.
 // Query of the boot hash (#/credits?checkout=success after Stripe), kept before the rewrite below.
 export const bootQuery = (() => { try { return new URLSearchParams(location.hash.split('?')[1] ?? ''); } catch { return new URLSearchParams(); } })();
-writeHistory(useApp.getState().screen, useApp.getState().docId, true);
+writeHistory(useApp.getState().screen, useApp.getState().docId, useApp.getState().editorMode, true);
 window.addEventListener('popstate', (e) => {
-  const st = (e.state as { screen?: Screen; docId?: string | null } | null) ?? parseHash();
+  const st = (e.state as { screen?: Screen; docId?: string | null; editorMode?: 'pages' | 'timeline' } | null) ?? parseHash();
   if (!st?.screen || !SCREENS.includes(st.screen)) return;
   const cur = useApp.getState();
-  if (st.screen === cur.screen && (st.docId ?? null) === cur.docId) return;
-  withTransition(() => useApp.setState({ screen: st.screen!, docId: st.docId ?? null, palOpen: false, kbOpen: false }));
+  if (st.screen === cur.screen && (st.docId ?? null) === cur.docId && (st.editorMode ?? cur.editorMode) === cur.editorMode) return;
+  withTransition(() => useApp.setState({ screen: st.screen!, docId: st.docId ?? null, editorMode: st.editorMode ?? 'pages', palOpen: false, kbOpen: false }));
 });

@@ -91,8 +91,9 @@ export type ClipMask = 'none' | 'circle' | 'rounded' | 'heart' | 'star' | 'diamo
 export interface Clip {
   id: string;
   track: TrackId;
-  kind: 'video' | 'image' | 'audio' | 'text';
+  kind: 'video' | 'image' | 'audio' | 'text' | 'page';
   mediaId?: string;
+  pageId?: string; // linked source page in the creative project
   name: string;
   start: number; // timeline seconds
   dur: number; // timeline seconds
@@ -129,13 +130,23 @@ export interface VideoData {
   capStyle: CapStyle;
   capY: number; // percent from top
   markers: number[];
+  detachedPages?: Page[]; // snapshots retained when a linked source page is deleted
+  pageSources?: Page[]; // runtime-only sources supplied by the project editor
 }
 
-export type DocKind = 'design' | 'video';
+export interface CreativeProjectData {
+  schemaVersion: 1;
+  design: DesignData;
+  video: VideoData;
+}
+
+export type EditorMode = 'pages' | 'timeline';
+export type DocKind = 'design' | 'video' | 'creative';
 
 export interface DocMeta {
   id: string;
   kind: DocKind;
+  mode?: EditorMode;
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -144,7 +155,7 @@ export interface DocMeta {
   format: string; // human label e.g. "1080×1920"
 }
 
-export interface Doc<T = DesignData | VideoData> extends DocMeta {
+export interface Doc<T = DesignData | VideoData | CreativeProjectData> extends DocMeta {
   data: T;
 }
 
@@ -170,7 +181,7 @@ export interface Version {
   at: number;
   origin: 'user' | 'agent' | 'autosave' | 'restore';
   label: string;
-  data: DesignData | VideoData;
+  data: DesignData | VideoData | CreativeProjectData;
   name: string;
 }
 

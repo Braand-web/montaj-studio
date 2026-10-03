@@ -5,7 +5,7 @@ import { get, put } from '../lib/db';
 import { runAgent, type AgentTool, type Step, str, num } from '../agent/runner';
 import { designTools, type DataTarget } from '../agent/designTools';
 import { videoTools } from '../agent/videoTools';
-import { createDoc, saveDoc, getDoc } from '../lib/docs';
+import { createDoc, saveDoc, getDoc, getProjectDoc } from '../lib/docs';
 import { FORMATS, fmt } from '../model/formats';
 import { TEMPLATES } from '../model/templates';
 import type { DesignData, Doc, VideoData } from '../model/types';
@@ -144,10 +144,10 @@ export function StudioChat() {
 
   // Sends a render of a created design back to Claude so it can check and fix its own work.
   const reviewDoc = async (card: Card) => {
-    const d = await getDoc<DesignData>(card.docId);
-    if (!d) return;
+    const project = await getProjectDoc(card.docId);
+    if (!project) return;
     const blobs: Blob[] = [];
-    for (const pg of d.data.pages.slice(0, Math.max(1, maxImages))) { try { const b = await canvasBlob(await renderPage(pg, 1024), 'image/jpeg', 0.85); blobs.push(b); } catch { /* skip page */ } }
+    for (const pg of project.data.design.pages.slice(0, Math.max(1, maxImages))) { try { const b = await canvasBlob(await renderPage(pg, 1024), 'image/jpeg', 0.85); blobs.push(b); } catch { /* skip page */ } }
     void send(T(`Vérifie le rendu de « ${card.name} » et corrige ce qui ne va pas.`, `Check the render of "${card.name}" and fix what is off.`), {
       images: blobs,
       notes: blobs.map((_, i) => `[Image ${i + 1}: render of page ${i + 1} of document ${card.docId} « ${card.name} ». Call open_document("${card.docId}") before editing. Fix cut or overflowing text, overlaps, low contrast, poor alignment or empty areas; if it looks good, say so.]`),
@@ -232,7 +232,7 @@ export function StudioChat() {
       for (const id of dirty) {
         const d = created.get(id);
         if (!d) continue;
-        if (d.kind === 'design') d.thumb = await pageThumb((d.data as DesignData).pages[0]);
+        if (d.kind === 'design' || d.mode === 'pages') d.thumb = await pageThumb((d.data as DesignData).pages[0]);
         await saveDoc(d);
       }
       dirty.clear();
@@ -261,12 +261,18 @@ export function StudioChat() {
       },
       changed: new Set(), changes: [],
     };
-    const addCard = (d: Doc) => { cards.push({ docId: d.id, kind: d.kind, name: d.name }); patchA({ cards: [...cards] }); };
+    const addCard = (d: Doc) => { cards.push({ docId: d.id, kind: d.kind === 'video' || d.mode === 'timeline' ? 'video' : 'design', name: d.name }); patchA({ cards: [...cards] }); };
     const openExisting = async (id: string) => {
-      const d = created.get(id) ?? (await getDoc(id));
+      let d = created.get(id) ?? (await getDoc(id));
       if (!d) throw new Error('Unknown document id');
+      if (d.kind === 'creative') {
+        const project = await getProjectDoc(id);
+        if (!project) throw new Error('Unreadable project');
+        const mode = project.mode ?? 'pages';
+        d = { ...project, data: mode === 'timeline' ? project.data.video : project.data.design } as Doc;
+      }
       created.set(d.id, d as Doc);
-      if (d.kind === 'design') activeDesign = d.id; else activeVideo = d.id;
+      if (d.kind === 'video' || d.mode === 'timeline') activeVideo = d.id; else activeDesign = d.id;
       if (!cards.some((c) => c.docId === d.id)) addCard(d as Doc);
       return d;
     };
@@ -414,7 +420,7 @@ export function StudioChat() {
             <div className="col" style={{ maxWidth: 1100, margin: '0 auto', padding: 24, gap: 14 }}>
               <span className="muted" style={{ fontSize: 13 }}>{allCards.length} {T('document(s) créé(s) dans Studio Chat', 'document(s) created in Studio Chat')}</span>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12 }}>
-                {allCards.map((c) => { const d = docs.find((x) => x.id === c.docId); return d ? <DocCard key={c.docId + Math.random()} name={d.name} thumb={d.thumb} kind={d.kind} onOpen={() => go(d.kind === 'video' ? 'video' : 'design', d.id)} /> : null; })}
+                {allCards.map((c) => { const d = docs.find((x) => x.id === c.docId); return d ? <DocCard key={c.docId + Math.random()} name={d.name} thumb={d.thumb} kind={d.mode === 'timeline' || d.kind === 'video' ? 'video' : 'design'} onOpen={() => go(d.mode === 'timeline' || d.kind === 'video' ? 'video' : 'design', d.id)} /> : null; })}
               </div>
               {!allCards.length && <div className="faint" style={{ padding: 60, textAlign: 'center', border: '1px dashed var(--line2)', borderRadius: 18 }}>{T('Les designs et vidéos créés ici apparaîtront dans cette galerie.', 'Designs and videos created here will show up in this gallery.')}</div>}
             </div>
@@ -562,7 +568,7 @@ export function StudioChat() {
               <span className="muted pretty" style={{ fontSize: 12 }}>{T('Mentionne un élément dans ta demande pour que Claude l’utilise.', 'Mention an element in your request so Claude uses it.')}</span>
               <ElRow mark="Aa" bg={brand.colors[2] ?? '#FFD23F'} name={brand.name} sub={T('Kit de marque', 'Brand kit')} onAt={() => setInput((v) => v + ` @kit « ${brand.name} »`)} />
               {media.filter((m) => m.kind === 'image').slice(0, 12).map((m) => <ElRow key={m.id} img={m.thumb} name={m.name} sub={T('Image · médiathèque', 'Image · library')} onAt={() => setInput((v) => v + ` @image « ${m.name} » (id ${m.id})`)} />)}
-              {docs.filter((d) => !d.trashedAt).slice(0, 6).map((d) => <ElRow key={d.id} img={d.thumb} name={d.name} sub={d.kind === 'video' ? T('Projet vidéo', 'Video project') : 'Design'} onAt={() => setInput((v) => v + ` @document « ${d.name} » (id ${d.id})`)} />)}
+              {docs.filter((d) => !d.trashedAt).slice(0, 6).map((d) => <ElRow key={d.id} img={d.thumb} name={d.name} sub={d.mode === 'timeline' || d.kind === 'video' ? T('Projet vidéo', 'Video project') : T('Projet créatif', 'Creative project')} onAt={() => setInput((v) => v + ` @document « ${d.name} » (id ${d.id})`)} />)}
               <button className="btn ghost" style={{ height: 40, borderStyle: 'dashed' }} onClick={() => go('library')}>{T('Ajouter des médias', 'Add media')}</button>
             </div>
           )}
@@ -597,10 +603,10 @@ function DocCard({ name, thumb, kind, onOpen }: { name: string; thumb?: string; 
 // Card for a document created in the chat: live preview of its first page.
 function LiveCard({ card, onOpen }: { card: Card; onOpen(): void }) {
   const T = useT();
-  const [doc, setDoc] = useState<Doc | null>(null);
-  useEffect(() => { let alive = true; const load = () => void getDoc(card.docId).then((d) => { if (alive && d) setDoc(d as Doc); }); load(); const i = setInterval(load, 1500); return () => { alive = false; clearInterval(i); }; }, [card.docId]);
-  const page = doc?.kind === 'design' ? (doc.data as DesignData).pages[0] : null;
-  const vd = doc?.kind === 'video' ? (doc.data as VideoData) : null;
+  const [doc, setDoc] = useState<Awaited<ReturnType<typeof getProjectDoc>>>(null);
+  useEffect(() => { let alive = true; const load = () => void getProjectDoc(card.docId).then((d) => { if (alive && d) setDoc(d); }); load(); const i = setInterval(load, 1500); return () => { alive = false; clearInterval(i); }; }, [card.docId]);
+  const page = doc?.mode === 'pages' ? doc.data.design.pages[0] : null;
+  const vd = doc?.mode === 'timeline' ? doc.data.video : null;
   return (
     <div className="col" style={{ gap: 8, padding: 10, borderRadius: 16, background: 'var(--panel)', border: '1px solid var(--line)' }}>
       <div style={{ height: 150, borderRadius: 10, background: 'var(--panel2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>

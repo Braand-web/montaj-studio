@@ -3,12 +3,12 @@ import { X } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { addVersion, listVersions } from '../lib/docs';
 import { notify as pushNotif } from '../lib/notify';
-import type { DesignData, Doc, Version, VideoData } from '../model/types';
+import type { Doc, Version } from '../model/types';
 
 // Version history (SPEC §6.10): manual versions, automatic versions after assistant runs,
 // and the current state is always kept before a restore.
 
-export function VersionsPanel({ doc, onRestore, onClose }: { doc: Doc; onRestore(data: DesignData | VideoData): void; onClose(): void }) {
+export function VersionsPanel({ doc, onRestore, onClose }: { doc: Doc; onRestore(data: Version['data']): void | Promise<void>; onClose(): void }) {
   const T = useT();
   const lang = useApp((s) => s.lang);
   const notify = useApp((s) => s.notify);
@@ -38,7 +38,7 @@ export function VersionsPanel({ doc, onRestore, onClose }: { doc: Doc; onRestore
             </div>
             <button className="btn sm" onClick={async () => {
               await addVersion(doc, 'restore', T('Avant restauration', 'Before restore'));
-              onRestore(JSON.parse(JSON.stringify(v.data)));
+              await onRestore(JSON.parse(JSON.stringify(v.data)));
               load();
               pushNotif({ kind: 'version', text: T(`Version restaurée : ${doc.name}`, `Version restored: ${doc.name}`) });
               notify(T('Version restaurée. L’état précédent a été gardé dans l’historique.', 'Version restored. The previous state was kept in history.'));

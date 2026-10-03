@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack, LayoutGrid, Repeat, ImageDown, SkipForward, Diamond, Snowflake, Pipette, Trash2 } from 'lucide-react';
+import { Undo2, Redo2, History, Download, Play, Pause, CloudCheck, FolderOpen, Type, Music, Captions as CapIcon, Sparkles, ArrowLeftRight, SlidersHorizontal, Camera, Plus, Upload, SkipBack, LayoutGrid, Repeat, ImageDown, SkipForward, Diamond, Snowflake, Pipette, Trash2, PanelLeftOpen, PanelRightOpen, X } from 'lucide-react';
 import { useApp, useT } from '../store/app';
 import { useVideo, V, newClip, freeTrack, trackEnd, duration, defaultFx, videoSnapshot, fmtDur, frameGrab } from './store';
 import { Engine } from './engine';
 import { transformAt, upsertKf, kfIndexAt, type KfProp } from './keyframes';
 import { Timeline } from './Timeline';
-import { getDoc, createDoc, patchDoc } from '../lib/docs';
+import { getProjectDoc, addProjectPage, patchDoc, restoreProjectData } from '../lib/docs';
 import { importBlob, importFiles, preload } from '../lib/media';
-import type { Clip, ClipFx, FontKey, MediaItem, VideoData, BlendMode, ClipMask } from '../model/types';
+import type { Clip, ClipFx, CreativeProjectData, Doc, FontKey, MediaItem, VideoData, BlendMode, ClipMask } from '../model/types';
 import { Composer, useAgentRun } from '../agent/Composer';
 import { videoHost, setVideoMedia } from './host';
 import { useImages } from '../design/LeftPanel';
@@ -22,6 +22,7 @@ import { tc, uid, slug } from '../lib/util';
 import { FONTS, FONT_KEYS } from '../model/fonts';
 import { canvasBlob } from '../design/render';
 import { notify as pushNotif } from '../lib/notify';
+import { EditorModeTabs } from '../editor/EditorModeTabs';
 
 type LTab = 'media' | 'text' | 'audio' | 'captions' | 'effects' | 'transitions' | 'filters';
 const LTABS: { id: LTab; fr: string; en: string; c: string; I: typeof Type }[] = [
@@ -53,18 +54,29 @@ export function VideoEditor() {
   const [tab, setTab] = useState<LTab>('media');
   const [right, setRight] = useState<'insp' | 'agent'>(pending ? 'agent' : 'insp');
   const [dialog, setDialog] = useState<null | 'export' | 'versions' | 'rec-webcam' | 'rec-screen' | 'rec-mic'>(null);
+  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 900px)').matches);
+  const [mobilePanel, setMobilePanel] = useState<null | 'tools' | 'inspector'>(null);
   const media = useImages();
   useEffect(() => { setVideoMedia(media); }, [media]);
   useEffect(() => { if (pending) setRight('agent'); }, [pending]);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const update = () => setCompact(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     let alive = true;
     setReady(false);
     void (async () => {
       if (!docId) { go('home'); return; }
-      const d = await getDoc<VideoData>(docId);
+      const project = await getProjectDoc(docId);
       if (!alive) return;
-      if (!d) { notify(T('Document introuvable.', 'Document not found.'), 'err'); go('home'); return; }
+      if (!project) { notify(T('Document introuvable ou illisible.', 'Document not found or unreadable.'), 'err'); go('home'); return; }
+      const video = { ...project.data.video, pageSources: [...project.data.design.pages, ...(project.data.video.detachedPages ?? [])] };
+      const d = { ...project, data: video } as Doc<VideoData>;
       await preload(d.data.clips.map((c) => c.mediaId));
       useVideo.getState().load(d);
       setReady(true);
@@ -114,52 +126,71 @@ export function VideoEditor() {
   const host = useMemo(() => videoHost(), []);
   if (!ready || !doc) return <div className="row faint" style={{ height: '100%', justifyContent: 'center' }}><span className="pulse" />{T('Ouverture…', 'Opening…')}</div>;
 
-  return (
-    <div style={{ height: '100%', overflow: 'auto', position: 'relative' }}>
-      {window.innerWidth < 1100 && <div style={{ position: 'sticky', left: 0, top: 0, zIndex: 30, padding: '8px 12px', background: 'var(--accSoft)', color: 'var(--accTx)', fontSize: 12, borderBottom: '1px solid var(--line)' }}>{T('Écran étroit : la timeline complète demande au moins 1 100 px. Fais défiler horizontalement.', 'Narrow screen: the full timeline needs at least 1,100 px. Scroll sideways.')}</div>}
-      <div style={{ display: 'grid', gridTemplateRows: '48px minmax(0,1fr) minmax(200px,290px)', height: '100%', minHeight: 640, minWidth: 1100 }}>
-        <Header onDialog={setDialog} />
-        <div style={{ display: 'grid', gridTemplateColumns: '64px 250px minmax(0,1fr) 330px', minHeight: 0 }}>
-          <div className="rail">
-            {LTABS.map((x) => (
-              <button key={x.id} className={tab === x.id ? 'on' : ''} onClick={() => setTab(x.id)}>
-                <span className="ic" style={{ background: tab === x.id ? x.c : `color-mix(in oklab, ${x.c} 16%, transparent)` }}><x.I size={17} color={tab === x.id ? '#fff' : x.c} /></span>
-                {T(x.fr, x.en)}
-              </button>
-            ))}
-          </div>
-          <div className="side">
-            <div style={{ padding: '12px 12px 8px', fontWeight: 600 }}>{T(LTABS.find((x) => x.id === tab)!.fr, LTABS.find((x) => x.id === tab)!.en)}</div>
-            <div className="side-b">
-              {tab === 'media' && <MediaTab media={media} onRec={(k) => setDialog(k)} kinds={['video', 'image']} />}
-              {tab === 'audio' && <MediaTab media={media} kinds={['audio']} />}
-              {tab === 'text' && <TextTab />}
-              {tab === 'captions' && <CaptionsTab />}
-              {tab === 'effects' && <LookTab kind="effects" />}
-              {tab === 'transitions' && <LookTab kind="transitions" />}
-              {tab === 'filters' && <LookTab kind="filters" />}
-            </div>
-          </div>
-          <Preview />
-          <aside style={{ borderLeft: '1px solid var(--line)', background: 'var(--panel)', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-            <div className="tabs">
-              <button className={right === 'insp' ? 'on' : ''} onClick={() => setRight('insp')}><SlidersHorizontal size={14} />{T('Inspecteur', 'Inspector')}</button>
-              <button className={right === 'agent' ? 'on' : ''} onClick={() => setRight('agent')}><Sparkles size={14} />{T('Assistant', 'Assistant')}</button>
-            </div>
-            <div style={{ display: right === 'insp' ? 'flex' : 'none', flexDirection: 'column', minHeight: 0, flex: 1, overflow: 'auto' }}><Inspector /></div>
-            <div style={{ display: right === 'agent' ? 'flex' : 'none', flexDirection: 'column', minHeight: 0, flex: 1 }}><Composer host={host} autoPrompt={pending} /></div>
-          </aside>
-        </div>
-        <Timeline onSeek={seekTo} />
+  const toolsPanel = <>
+    <div className="rail">
+      {LTABS.map((x) => (
+        <button key={x.id} className={tab === x.id ? 'on' : ''} onClick={() => setTab(x.id)}>
+          <span className="ic" style={{ background: tab === x.id ? x.c : `color-mix(in oklab, ${x.c} 16%, transparent)` }}><x.I size={17} color={tab === x.id ? '#fff' : x.c} /></span>
+          {T(x.fr, x.en)}
+        </button>
+      ))}
+    </div>
+    <div className="side" style={{ minWidth: 0 }}>
+      <div style={{ padding: '12px 12px 8px', fontWeight: 600 }}>{T(LTABS.find((x) => x.id === tab)!.fr, LTABS.find((x) => x.id === tab)!.en)}</div>
+      <div className="side-b">
+        {tab === 'media' && <MediaTab media={media} onRec={(k) => setDialog(k)} kinds={['video', 'image']} />}
+        {tab === 'audio' && <MediaTab media={media} kinds={['audio']} />}
+        {tab === 'text' && <TextTab />}
+        {tab === 'captions' && <CaptionsTab />}
+        {tab === 'effects' && <LookTab kind="effects" />}
+        {tab === 'transitions' && <LookTab kind="transitions" />}
+        {tab === 'filters' && <LookTab kind="filters" />}
       </div>
+    </div>
+  </>;
+
+  const inspectorPanel = <aside style={{ borderLeft: '1px solid var(--line)', background: 'var(--panel)', display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+    <div className="tabs">
+      <button className={right === 'insp' ? 'on' : ''} onClick={() => setRight('insp')}><SlidersHorizontal size={14} />{T('Inspecteur', 'Inspector')}</button>
+      <button className={right === 'agent' ? 'on' : ''} onClick={() => setRight('agent')}><Sparkles size={14} />{T('Assistant', 'Assistant')}</button>
+    </div>
+    <div style={{ display: right === 'insp' ? 'flex' : 'none', flexDirection: 'column', minHeight: 0, flex: 1, overflow: 'auto' }}><Inspector /></div>
+    <div style={{ display: right === 'agent' ? 'flex' : 'none', flexDirection: 'column', minHeight: 0, flex: 1 }}><Composer host={host} autoPrompt={pending} /></div>
+  </aside>;
+
+  return (
+    <div style={{ height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden', position: 'relative' }}>
+      <div style={{ display: 'grid', gridTemplateRows: compact ? '48px minmax(0,1fr) minmax(175px,34vh)' : '48px minmax(0,1fr) minmax(200px,290px)', height: '100%', minHeight: 0, minWidth: 0 }}>
+        <Header compact={compact} onDialog={setDialog} />
+        <div style={{ display: 'grid', gridTemplateRows: compact ? '38px minmax(0,1fr)' : 'minmax(0,1fr)', gridTemplateColumns: compact ? 'minmax(0,1fr)' : '64px 250px minmax(0,1fr) 330px', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+          {compact ? <div className="row" style={{ minWidth: 0, gap: 6, padding: '0 8px', overflowX: 'auto', borderBottom: '1px solid var(--line)', background: 'var(--panel)' }}>
+            <button className="btn sm" onClick={() => setMobilePanel('tools')}><PanelLeftOpen size={13} />{T('Outils', 'Tools')}</button>
+            <button className="btn sm" onClick={() => setMobilePanel('inspector')}><PanelRightOpen size={13} />{T('Inspecteur', 'Inspector')}</button>
+            <button className="btn sm" onClick={() => setDialog('versions')}><History size={13} />{T('Versions', 'Versions')}</button>
+          </div> : <>{toolsPanel}<Preview />{inspectorPanel}</>}
+          {compact && <Preview />}
+        </div>
+        <Timeline onSeek={seekTo} compact={compact} />
+      </div>
+      {compact && mobilePanel && <div role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setMobilePanel(null); }} style={{ position: 'absolute', inset: '48px 0 0', zIndex: 20, background: 'rgba(0,0,0,.48)', display: 'flex', alignItems: 'flex-end' }}>
+        <section role="dialog" aria-modal="true" aria-label={mobilePanel === 'tools' ? T('Outils du montage', 'Editing tools') : T('Inspecteur du montage', 'Editing inspector')} style={{ width: '100%', height: 'min(76%, 620px)', minHeight: 260, background: 'var(--panel)', borderTop: '1px solid var(--line2)', borderRadius: '16px 16px 0 0', boxShadow: '0 -12px 40px rgba(0,0,0,.25)', overflow: 'hidden', display: 'grid', gridTemplateRows: '42px minmax(0,1fr)', gridTemplateColumns: mobilePanel === 'tools' ? '64px minmax(0,1fr)' : 'minmax(0,1fr)' }}>
+          <div className="row" style={{ gridColumn: '1 / -1', justifyContent: 'space-between', padding: '0 12px', borderBottom: '1px solid var(--line)' }}><strong style={{ fontSize: 13 }}>{mobilePanel === 'tools' ? T('Outils', 'Tools') : T('Inspecteur', 'Inspector')}</strong><button className="btn icon" onClick={() => setMobilePanel(null)} aria-label={T('Fermer', 'Close')}><X size={15} /></button></div>
+          {mobilePanel === 'tools' ? toolsPanel : inspectorPanel}
+        </section>
+      </div>}
       {dialog === 'export' && <ExportVideo onClose={() => setDialog(null)} />}
-      {dialog === 'versions' && <VersionsPanel doc={doc} onClose={() => setDialog(null)} onRestore={(d) => useVideo.getState().apply((x) => { Object.assign(x, d as VideoData); })} />}
+      {dialog === 'versions' && <VersionsPanel doc={doc} onClose={() => setDialog(null)} onRestore={async (d) => {
+        if ('schemaVersion' in d) {
+          const project = await restoreProjectData(doc.id, d as CreativeProjectData);
+          if (project) useVideo.getState().load({ ...project, data: { ...project.data.video, pageSources: [...project.data.design.pages, ...(project.data.video.detachedPages ?? [])] } });
+        } else useVideo.getState().apply((x) => { Object.assign(x, d as VideoData); });
+      }} />}
       {dialog?.startsWith('rec-') && <RecordDialog kind={dialog.slice(4) as 'webcam' | 'screen' | 'mic'} onClose={() => setDialog(null)} />}
     </div>
   );
 }
 
-function Header({ onDialog }: { onDialog(d: 'export' | 'versions'): void }) {
+function Header({ compact, onDialog }: { compact: boolean; onDialog(d: 'export' | 'versions'): void }) {
   const T = useT();
   const go = useApp((s) => s.go);
   const lang = useApp((s) => s.lang);
@@ -171,18 +202,19 @@ function Header({ onDialog }: { onDialog(d: 'export' | 'versions'): void }) {
   return (
     <header className="ed-header">
       <button className="logo-btn" onClick={() => { engine?.pause(); go('home'); }} title={T('Accueil', 'Home')}><LogoMark /></button>
-      <button className="btn bare" style={{ height: 30, padding: '0 8px', flex: 'none' }} onClick={() => useApp.getState().set({ palOpen: true })} title={T('Aller à… (⌘K)', 'Go to… (⌘K)')}><LayoutGrid size={14} /><span className="mono" style={{ fontSize: 10, padding: '1px 5px', borderRadius: 5, background: 'var(--panel2)', color: 'var(--tx3)' }}>⌘K</span></button>
+      {!compact && <button className="btn bare" style={{ height: 30, padding: '0 8px', flex: 'none' }} onClick={() => useApp.getState().set({ palOpen: true })} title={T('Aller à… (⌘K)', 'Go to… (⌘K)')}><LayoutGrid size={14} /><span className="mono" style={{ fontSize: 10, padding: '1px 5px', borderRadius: 5, background: 'var(--panel2)', color: 'var(--tx3)' }}>⌘K</span></button>}
       <div className="col" style={{ lineHeight: 1.2, minWidth: 0 }}>
-        <input id="vdoc-name" value={doc.name} onChange={(e) => useVideo.getState().rename(e.target.value)} style={{ fontWeight: 600, border: 0, background: 'transparent', outline: 'none', padding: 0, width: 240 }} />
-        <span className="faint row" style={{ fontSize: 11, gap: 4 }}><CloudCheck size={11} color="var(--accTx)" />{T('Enregistré · sur cet appareil', 'Saved · on this device')}</span>
+        <input id="vdoc-name" value={doc.name} onChange={(e) => useVideo.getState().rename(e.target.value)} style={{ fontWeight: 600, border: 0, background: 'transparent', outline: 'none', padding: 0, width: compact ? 108 : 240 }} />
+        {!compact && <span className="faint row" style={{ fontSize: 11, gap: 4 }}><CloudCheck size={11} color="var(--accTx)" />{T('Enregistré · sur cet appareil', 'Saved · on this device')}</span>}
       </div>
+      <EditorModeTabs />
       <div style={{ width: 1, height: 20, background: 'var(--line2)', margin: '0 4px' }} />
       <button className="btn icon" disabled={!past || locked} onClick={() => useVideo.getState().undo()} title={T('Annuler (⌘Z)', 'Undo (⌘Z)')}><Undo2 size={14} /></button>
       <button className="btn icon" disabled={!future || locked} onClick={() => useVideo.getState().redo()} title={T('Rétablir (⌘⇧Z)', 'Redo (⌘⇧Z)')}><Redo2 size={14} /></button>
-      <span className="mono muted" style={{ height: 28, padding: '0 10px', borderRadius: 10, border: '1px solid var(--line2)', display: 'inline-flex', alignItems: 'center', fontSize: 11 }}>{doc.data.w}×{doc.data.h} · 30 fps</span>
+      {!compact && <span className="mono muted" style={{ height: 28, padding: '0 10px', borderRadius: 10, border: '1px solid var(--line2)', display: 'inline-flex', alignItems: 'center', fontSize: 11 }}>{doc.data.w}×{doc.data.h} · 30 fps</span>}
       <div className="grow" />
-      <button className="btn" style={{ height: 28 }} onClick={toggleLang}>{lang === 'fr' ? 'EN' : 'FR'}</button>
-      <button className="btn" style={{ height: 28 }} onClick={() => onDialog('versions')}><History size={13} />{T('Versions', 'Versions')}</button>
+      {!compact && <button className="btn" style={{ height: 28 }} onClick={toggleLang}>{lang === 'fr' ? 'EN' : 'FR'}</button>}
+      {!compact && <button className="btn" style={{ height: 28 }} onClick={() => onDialog('versions')}><History size={13} />{T('Versions', 'Versions')}</button>}
       <button className="btn primary" style={{ height: 28 }} onClick={() => { engine?.pause(); useVideo.getState().setPlaying(false); onDialog('export'); }}><Download size={13} />{T('Exporter', 'Export')}</button>
     </header>
   );
@@ -215,7 +247,7 @@ function Preview() {
     frameGrab.fn = async () => {
       if (!engine || !useVideo.getState().view().clips.length) return null;
       const c = document.createElement('canvas');
-      engine.drawTo(c, engine.t);
+      await engine.drawTo(c, engine.t);
       return canvasBlob(c, 'image/jpeg', 0.85).catch(() => null);
     };
     return () => { frameGrab.fn = null; saveThumb(); engine?.destroy(); engine = null; };
@@ -231,19 +263,17 @@ function Preview() {
   const capture = async () => {
     if (!engine) return;
     const c = document.createElement('canvas');
-    engine.drawTo(c, engine.t);
+    await engine.drawTo(c, engine.t);
     const blob = await canvasBlob(c, 'image/jpeg', 0.94);
     const name = `frame_${tc(engine.t).replace(/:/g, '')}.jpg`;
     const m = await importBlob(blob, name, 'capture', 'image');
     if (!m) return;
     const d = useVideo.getState().doc!;
     const W = view.w >= view.h ? 1280 : 1080, H = view.w >= view.h ? 720 : 1920;
-    const doc = await createDoc('design', `${d.name} — ${useApp.getState().lang === 'fr' ? 'miniature' : 'thumbnail'}`, `${W}×${H}`, {
-      pages: [{ id: uid('p'), w: W, h: H, bg: '#0F1115', els: [{ id: uid('e'), type: 'image', name, mediaId: m.id, x: 0, y: 0, w: W, h: H, fit: 'cover' }] }],
-    });
-    notify(T('Image capturée : nouveau document design créé.', 'Frame captured: new design document created.'));
+    await addProjectPage(d.id, { id: uid('p'), w: W, h: H, bg: '#0F1115', els: [{ id: uid('e'), type: 'image', name, mediaId: m.id, x: 0, y: 0, w: W, h: H, fit: 'contain' }] });
+    notify(T('Image capturée dans ce projet comme nouvelle page.', 'Frame captured into this project as a new page.'));
     engine.pause();
-    go('design', doc.id);
+    go('design', d.id);
   };
 
   const loop = useVideo((s) => s.loop);
@@ -251,7 +281,7 @@ function Preview() {
     if (!engine) return;
     const at = Math.round(engine.t * 100) / 100;
     const c = document.createElement('canvas');
-    engine.drawTo(c, at);
+    await engine.drawTo(c, at);
     const blob = await canvasBlob(c, 'image/jpeg', 0.95);
     const m = await importBlob(blob, `freeze_${tc(at).replace(/[:.]/g, '-')}.jpg`, 'capture', 'image');
     if (!m) return;
@@ -268,7 +298,7 @@ function Preview() {
   const saveFrame = async () => {
     if (!engine) return;
     const c = document.createElement('canvas');
-    engine.drawTo(c, engine.t);
+    await engine.drawTo(c, engine.t);
     const blob = await canvasBlob(c, 'image/png');
     const d = useVideo.getState().doc!;
     const r = await saveFile(`${slug(d.name) || 'video'}_${tc(engine.t).replace(/[:.]/g, '-')}.png`, blob);
@@ -497,7 +527,7 @@ function LookTab({ kind }: { kind: 'effects' | 'filters' | 'transitions' }) {
   const sel = useVideo((s) => s.sel);
   const clip = useVideo((s) => s.view().clips.find((c) => c.id === s.sel));
   const notify = useApp((s) => s.notify);
-  const visual = clip && (clip.kind === 'video' || clip.kind === 'image');
+  const visual = clip && (clip.kind === 'video' || clip.kind === 'image' || clip.kind === 'page');
   const need = () => { notify(T('Sélectionne d’abord un clip vidéo ou image sur la timeline.', 'Select a video or image clip on the timeline first.'), 'info'); };
   const item: React.CSSProperties = { textAlign: 'left', padding: '9px 10px', borderRadius: 10, border: '1px solid transparent', background: 'var(--panel2)', fontSize: 12, display: 'flex', justifyContent: 'space-between' };
   return (
@@ -602,11 +632,17 @@ function Inspector() {
   ];
   const fx = { ...defaultFx(), ...c.fx };
   const setFx = (k: keyof ClipFx, v: number) => up((x) => { x.fx = { ...defaultFx(), ...x.fx, [k]: v }; }, 'fx' + c.id + k);
-  const visual = c.kind === 'video' || c.kind === 'image';
+  const visual = c.kind === 'video' || c.kind === 'image' || c.kind === 'page';
   const hasAudio = c.kind === 'video' || c.kind === 'audio';
+  const sourcePage = c.kind === 'page' ? view.pageSources?.find((p) => p.id === c.pageId) : undefined;
+  const projectGo = useApp((s) => s.go);
   return (
     <div className="col" style={{ padding: 14, gap: 12 }}>
       <div className="col" style={{ gap: 2 }}><span className="eyebrow">{T('Sélection', 'Selection')}</span><span className="mono ell" style={{ fontSize: 12 }}>{c.name}</span></div>
+      {c.kind === 'page' && <Section title={T('Page liée', 'Linked page')}>
+        <span className="faint pretty" style={{ fontSize: 11 }}>{sourcePage?.label ?? T('Cette scène reprend sa composition depuis le mode Pages.', 'This scene uses its composition from Pages mode.')}</span>
+        <button className="btn sm" onClick={() => projectGo('design', useVideo.getState().doc!.id)}>{T('Modifier dans Pages', 'Edit in Pages')}</button>
+      </Section>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         {(['start', 'dur'] as const).map((k) => (
           <label key={k} className="field"><span>{k === 'start' ? T('Début (s)', 'Start (s)') : T('Durée (s)', 'Duration (s)')}</span>
@@ -635,8 +671,10 @@ function Inspector() {
       {visual && (
         <>
           <Section title={T('Cadrage et animation', 'Framing and motion')}>
-            <Chips small value={c.fit ?? 'cover'} onChange={(v) => up({ fit: v })} options={[{ id: 'cover' as const, label: T('Remplir', 'Fill') }, { id: 'contain' as const, label: T('Contenir', 'Fit') }]} />
-            {(c.fit ?? 'cover') === 'contain' && <div className="row"><Switch on={!!c.bgBlur} onChange={(v) => up({ bgBlur: v })} /><span style={{ fontSize: 12 }}>{T('Arrière-plan flou', 'Blurred background')}</span></div>}
+            {c.kind !== 'page' && <>
+              <Chips small value={c.fit ?? 'cover'} onChange={(v) => up({ fit: v })} options={[{ id: 'cover' as const, label: T('Remplir', 'Fill') }, { id: 'contain' as const, label: T('Contenir', 'Fit') }]} />
+              {(c.fit ?? 'cover') === 'contain' && <div className="row"><Switch on={!!c.bgBlur} onChange={(v) => up({ bgBlur: v })} /><span style={{ fontSize: 12 }}>{T('Arrière-plan flou', 'Blurred background')}</span></div>}
+            </>}
             <KeyframeBar c={c} local={local} />
             {tfRows.map(([k, l, min, max, step, suf, mul]) => (
               <Slider key={k} id={'c-' + k} label={l + (kfMode && kfHere ? ' ◆' : '')} value={Math.round(tf[k] * mul * 100) / 100} min={min} max={max} step={step} suffix={suf}
@@ -652,7 +690,7 @@ function Inspector() {
               </select>
             </label>
           </Section>
-          <Section title={T('Incrustation (fond vert)', 'Chroma key (green screen)')}>
+          {c.kind !== 'page' && <Section title={T('Incrustation (fond vert)', 'Chroma key (green screen)')}>
             <div className="row"><Switch on={!!c.chroma} onChange={(v) => up({ chroma: v ? { color: '#00FF00', tol: 35 } : undefined })} /><span style={{ fontSize: 12 }}>{T('Retirer une couleur de fond', 'Remove a background color')}</span></div>
             {c.chroma && (
               <>
@@ -664,7 +702,7 @@ function Inspector() {
                 <span className="faint pretty" style={{ fontSize: 11 }}>{T('Place ce clip sur la piste Superposition, au-dessus de ton fond.', 'Put this clip on the Overlay track, above your background.')}</span>
               </>
             )}
-          </Section>
+          </Section>}
           <Section title={T('Couleur', 'Color')}>
             <Slider id="fx-bri" label={T('Luminosité', 'Brightness')} value={fx.bri} min={-100} max={100} onChange={(v) => setFx('bri', v)} />
             <Slider id="fx-con" label={T('Contraste', 'Contrast')} value={fx.con} min={-100} max={100} onChange={(v) => setFx('con', v)} />
@@ -688,7 +726,7 @@ function Inspector() {
           </Section>
         </>
       )}
-      {c.kind !== 'text' && c.kind !== 'image' && (
+      {(c.kind === 'video' || c.kind === 'audio') && (
         <Section title={T('Vitesse', 'Speed')}>
           <Chips small value={c.speed ?? 1} onChange={(v) => { const old = c.speed ?? 1; up({ speed: v, dur: Math.round(((c.dur * old) / v) * 100) / 100 }); }} options={[0.25, 0.5, 1, 1.5, 2, 4].map((v) => ({ id: v, label: `${v}×` }))} />
         </Section>

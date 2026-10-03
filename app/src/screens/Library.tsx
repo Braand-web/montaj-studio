@@ -9,7 +9,7 @@ import { bytes, uid } from '../lib/util';
 import { fmtDur } from '../video/store';
 import type { MediaItem } from '../model/types';
 import { newDesignFromData, emptyVideo } from '../lib/create';
-import { createDoc } from '../lib/docs';
+import { createProjectDoc } from '../lib/docs';
 
 type Filter = 'all' | 'video' | 'image' | 'audio' | 'recording' | 'capture';
 
@@ -53,7 +53,7 @@ export function Library() {
       const vertical = !!(m.w && m.h && m.h > m.w);
       const data = emptyVideo(vertical ? 1080 : 1920, vertical ? 1920 : 1080);
       data.clips.push({ id: uid('c'), track: m.kind === 'audio' ? 'audio' : 'video', kind: m.kind, mediaId: m.id, name: m.name, start: 0, dur: Math.max(0.5, m.duration ?? 5), in: 0, volume: 1, speed: 1 });
-      const d = await createDoc('video', m.name.replace(/\.[a-z0-9]+$/i, ''), `${data.w}×${data.h}`, data);
+      const d = await createProjectDoc('timeline', m.name.replace(/\.[a-z0-9]+$/i, ''), `${data.w}×${data.h}`, data);
       go('video', d.id);
     }
   };

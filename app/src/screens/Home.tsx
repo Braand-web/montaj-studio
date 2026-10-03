@@ -136,9 +136,9 @@ export function Home() {
           {shown.map((d) => (
             <div key={d.id} style={{ position: 'relative' }}>
               <button onClick={async () => { await trashDoc(d.id); notify(T('Déplacé dans la corbeille (restaurable 30 jours).', 'Moved to trash (restorable for 30 days).')); }} title={T('Mettre à la corbeille', 'Move to trash')} style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, width: 28, height: 28, borderRadius: 10, border: 0, background: 'rgba(10,11,13,.55)', color: '#fff', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={12} /></button>
-              <button onClick={() => go(d.kind === 'video' ? 'video' : 'design', d.id)} className="col" style={{ padding: 0, border: 0, background: 'transparent', gap: 8, textAlign: 'left', width: '100%' }}>
+              <button onClick={() => go(d.mode === 'timeline' || d.kind === 'video' ? 'video' : 'design', d.id)} className="col" style={{ padding: 0, border: 0, background: 'transparent', gap: 8, textAlign: 'left', width: '100%' }}>
                 <div className={d.thumb ? '' : 'stripes'} style={{ width: '100%', aspectRatio: '16/10', borderRadius: 16, border: '1px solid var(--line)', background: d.thumb ? `url(${d.thumb}) center/contain no-repeat, var(--panel2)` : undefined, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', padding: 8 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 10, background: 'rgba(10,11,13,.6)', color: '#fff' }}>{d.kind === 'video' ? T('Vidéo', 'Video') : 'Design'}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 10, background: 'rgba(10,11,13,.6)', color: '#fff' }}>{d.mode === 'timeline' || d.kind === 'video' ? T('Vidéo', 'Video') : T('Pages', 'Pages')}</span>
                 </div>
                 <div className="col" style={{ gap: 1 }}>
                   <span className="ell" style={{ fontWeight: 500 }}>{d.name}</span>

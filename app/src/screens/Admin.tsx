@@ -25,7 +25,7 @@ export function Admin() {
   const live = docs.filter((d) => !d.trashedAt);
   const size = media.reduce((s, m) => s + m.size, 0);
   const kpis: [typeof Shield, string, string, string, string][] = [
-    [FileStack, '#0A84FF', T('Documents', 'Documents'), String(live.length), `${live.filter((d) => d.kind === 'design').length} design · ${live.filter((d) => d.kind === 'video').length} ${T('vidéo', 'video')}`],
+    [FileStack, '#0A84FF', T('Documents', 'Documents'), String(live.length), `${live.filter((d) => d.mode !== 'timeline' && d.kind !== 'video').length} ${T('pages', 'pages')} · ${live.filter((d) => d.mode === 'timeline' || d.kind === 'video').length} ${T('timeline', 'timeline')}`],
     [Images, '#FF9F0A', T('Médias', 'Media'), String(media.length), bytes(size, lang)],
     [Sparkles, '#5E5CE6', T('Requêtes IA (7 j)', 'AI requests (7 d)'), String(rows.filter((r) => r.at >= week).length), T(`${rows.filter((r) => r.status !== 'ok').length} en échec au total`, `${rows.filter((r) => r.status !== 'ok').length} failed in total`)],
     [Lightbulb, '#FFD60A', T('Suggestions ouvertes', 'Open suggestions'), String(fb.filter((f) => !['done', 'declined'].includes(f.status)).length), T(`${fb.length} au total`, `${fb.length} in total`)],
@@ -51,8 +51,8 @@ export function Admin() {
           <div style={{ minWidth: 620 }}>
             <div className="eyebrow" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 90px 150px 150px', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line)' }}><span>{T('Document', 'Document')}</span><span>{T('Type', 'Type')}</span><span>{T('Format', 'Format')}</span><span>{T('Statut', 'Status')}</span></div>
             {docs.map((d) => (
-              <button key={d.id} onClick={() => !d.trashedAt && go(d.kind === 'video' ? 'video' : 'design', d.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 90px 150px 150px', gap: 12, padding: '10px 16px', border: 0, borderBottom: '1px solid var(--line)', background: 'transparent', width: '100%', textAlign: 'left', fontSize: 13 }}>
-                <span className="ell">{d.name}</span><span className="muted">{d.kind === 'video' ? T('Vidéo', 'Video') : 'Design'}</span><span className="mono muted" style={{ fontSize: 12 }}>{d.format}</span><span style={{ color: d.trashedAt ? 'var(--warn)' : '#30D158', fontSize: 12 }}>{d.trashedAt ? T('Corbeille', 'Trash') : T('Actif', 'Active')}</span>
+              <button key={d.id} onClick={() => !d.trashedAt && go(d.mode === 'timeline' || d.kind === 'video' ? 'video' : 'design', d.id)} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) 90px 150px 150px', gap: 12, padding: '10px 16px', border: 0, borderBottom: '1px solid var(--line)', background: 'transparent', width: '100%', textAlign: 'left', fontSize: 13 }}>
+                <span className="ell">{d.name}</span><span className="muted">{d.mode === 'timeline' || d.kind === 'video' ? T('Timeline', 'Timeline') : T('Pages', 'Pages')}</span><span className="mono muted" style={{ fontSize: 12 }}>{d.format}</span><span style={{ color: d.trashedAt ? 'var(--warn)' : '#30D158', fontSize: 12 }}>{d.trashedAt ? T('Corbeille', 'Trash') : T('Actif', 'Active')}</span>
               </button>
             ))}
             {!docs.length && <div className="faint" style={{ padding: 24, textAlign: 'center', fontSize: 12 }}>{T('Aucun document.', 'No documents.')}</div>}

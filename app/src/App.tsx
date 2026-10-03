@@ -24,8 +24,7 @@ import { useUsage } from './lib/usage';
 import { useIdentity } from './lib/identity';
 import { Trash } from './screens/Trash';
 import { Settings } from './screens/Settings';
-import { DesignEditor } from './design/DesignEditor';
-import { VideoEditor } from './video/VideoEditor';
+import { UnifiedEditor } from './editor/UnifiedEditor';
 import { sweepTrash } from './lib/docs';
 import { listMedia } from './lib/media';
 import { FORMATS } from './model/formats';
@@ -68,8 +67,7 @@ export function App() {
   let body: React.ReactNode;
   if (screen === 'onboarding') body = <Onboarding />;
   else if (screen === 'site') body = <Site />;
-  else if (screen === 'design') body = <DesignEditor />;
-  else if (screen === 'video') body = <VideoEditor />;
+  else if (screen === 'editor' || screen === 'design' || screen === 'video') body = <UnifiedEditor />;
   else if (screen === 'chat') body = <StudioChat />;
   else {
     const S = { home: Home, library: Library, templates: Templates, bulk: Bulk, planner: Planner, brand: Brand, providers: Providers, trash: Trash, settings: Settings, credits: Credits, feedback: Feedback, team: Team, usage: Usage, admin: Admin, legal: Legal }[screen] ?? Home;
@@ -121,7 +119,7 @@ function Palette({ onClose }: { onClose(): void }) {
   const items = useMemo(() => {
     const m = (s: string) => !q || s.toLowerCase().includes(q.toLowerCase());
     const out: { g: string; label: string; sub?: string; icon: React.ReactNode; go(): void }[] = [];
-    docs.filter((d) => m(d.name)).slice(0, 8).forEach((d) => out.push({ g: T('Documents', 'Documents'), label: d.name, sub: d.format, icon: d.kind === 'video' ? <Clapperboard size={14} /> : <ImageIcon size={14} />, go: () => go(d.kind === 'video' ? 'video' : 'design', d.id) }));
+    docs.filter((d) => m(d.name)).slice(0, 8).forEach((d) => out.push({ g: T('Documents', 'Documents'), label: d.name, sub: d.format, icon: d.mode === 'timeline' || d.kind === 'video' ? <Clapperboard size={14} /> : <ImageIcon size={14} />, go: () => go(d.mode === 'timeline' || d.kind === 'video' ? 'video' : 'design', d.id) }));
     NAV.filter((n) => (n.id !== 'admin' || useIdentity.getState().isOwner) && m(T(n.fr, n.en))).forEach((n) => out.push({ g: T('Aller à', 'Go to'), label: T(n.fr, n.en), icon: <n.I size={14} />, go: () => goNav(n.id) }));
     if (m(T('Documents légaux', 'Legal'))) out.push({ g: T('Aller à', 'Go to'), label: T('Documents légaux', 'Legal'), icon: <Scale size={14} />, go: () => go('legal') });
     if (m(T('Voir le site marketing', 'View the marketing site'))) out.push({ g: T('Aller à', 'Go to'), label: T('Voir le site marketing', 'View the marketing site'), icon: <Globe size={14} />, go: () => go('site') });

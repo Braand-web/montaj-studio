@@ -8,8 +8,8 @@ import { dimsLabel } from '../model/formats';
 
 export const TRACKS: { id: TrackId; fr: string; en: string; icon: string; accepts: Clip['kind'][] }[] = [
   { id: 'text', fr: 'Titres', en: 'Titles', icon: 'type', accepts: ['text'] },
-  { id: 'broll', fr: 'Superposition', en: 'Overlay', icon: 'layers', accepts: ['video', 'image'] },
-  { id: 'video', fr: 'Vidéo', en: 'Video', icon: 'film', accepts: ['video', 'image'] },
+  { id: 'broll', fr: 'Superposition', en: 'Overlay', icon: 'layers', accepts: ['video', 'image', 'page'] },
+  { id: 'video', fr: 'Vidéo', en: 'Video', icon: 'film', accepts: ['video', 'image', 'page'] },
   { id: 'audio', fr: 'Audio', en: 'Audio', icon: 'mic', accepts: ['audio'] },
   { id: 'music', fr: 'Musique', en: 'Music', icon: 'music', accepts: ['audio'] },
 ];
